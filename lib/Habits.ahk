@@ -541,6 +541,13 @@ HabitIndex(name) {
 ; "## habits" goes back exactly as it came out, whoever wrote it. A day that has
 ; not closed yet has no block, and needs nothing - the close will write it right.
 HabitFixNote(day, name, did) {
+    global NoteBusy
+    was := NoteBusy, NoteBusy := 1       ; see DayNoteWrite()
+    HabitFixNoteNow(day, name, did)
+    NoteBusy := was
+}
+
+HabitFixNoteNow(day, name, did) {
     global JournalOn
     if (!JournalOn)
         return

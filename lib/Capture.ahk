@@ -18,10 +18,13 @@ BuildCapture() {
     ; past the last line the box will grow to.
     Gui, Cap:Add, Edit, vCapEdit gCapGrow w360 h26 c%CText% -E0x200 +Multi -VScroll +0x40
     Gui, Cap:Font, s8, Segoe UI
-    ; two lines on purpose: on one line this hint was wider than the panel, and
-    ; AutoSize then stretched the whole box past it
-    CapHintAdd := "Enter add   " Chr(0x00B7) " Shift+Enter already did it`n"
-                . "Ctrl+Enter long term   " Chr(0x00B7) " Esc cancel"
+    ; Two lines on purpose: on one line this hint was wider than the panel, and
+    ; AutoSize then stretched the whole box past it.
+    ; There is no "already did it" any more. A task starts open, always: the
+    ; list is for what is still to do, and what already happened belongs in the
+    ; journal - the JOURNAL heading on the panel.
+    CapHintAdd := "Enter add   " Chr(0x00B7) " Esc cancel`n"
+                . "Ctrl+Enter long term"
     Gui, Cap:Add, Text, vCapHint w360 c%CDim%, %CapHintAdd%
     BoxRemember("Cap")
 }
@@ -221,8 +224,6 @@ ClampWin(ByRef x, ByRef y, w, h) {
 #IfWinActive Daybook capture ahk_class AutoHotkeyGUI
 Enter::CommitAdd("", "open")
 NumpadEnter::CommitAdd("", "open")
-+Enter::CommitAdd("T", "done")
-+NumpadEnter::CommitAdd("T", "done")
 ^Enter::CommitAdd("L", "open")
 ^NumpadEnter::CommitAdd("L", "open")
 Escape::CloseCapture()
@@ -244,8 +245,8 @@ CommitAdd(list, status) {
     }
     if (list = "")
         list := CapList
-    ; Opened from the HABITS +, so Shift and Ctrl have nothing to offer: there
-    ; is no other list to put it in and no such thing as a habit you already did.
+    ; Opened from the HABITS +, so Ctrl has nothing to offer: there is no
+    ; other list to put it in.
     if (CapList = "H") {
         HabitAdd(txt)
         return

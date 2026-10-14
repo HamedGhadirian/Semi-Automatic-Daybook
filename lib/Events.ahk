@@ -56,6 +56,10 @@ AddClick:
     QuickAdd("T")
 Return
 
+JrnHdrClick:
+    JrnShow()
+Return
+
 LongAddClick:
     QuickAdd("L")
 Return

@@ -75,6 +75,15 @@ BuildPanel() {
     Gui, Panel:Font, s12 Norm, Segoe UI
     Gui, Panel:Add, Text, vHabAdd gHabAddClick x266 y82 w24 h20 Right c%CMuted% BackgroundTrans, +
 
+    ; ---- the journal.  Not a list and nothing to fold: the heading is a button
+    ;      that opens the journal window, with a pencil where a caret would be,
+    ;      and today's words on the right. Gone while the journal is off.
+    Gui, Panel:Font, s9 Bold, Segoe UI
+    Gui, Panel:Add, Text, vJrnHdr gJrnHdrClick x12 y84 w160 h17 c%CText% BackgroundTrans
+        , % Chr(0x270E) " JOURNAL"
+    Gui, Panel:Font, s8 Norm, Segoe UI
+    Gui, Panel:Add, Text, vJrnCnt gJrnHdrClick x176 y86 w86 h14 Right c%CMuted% BackgroundTrans,
+
     Gui, Panel:Font, s9 Bold, Segoe UI
     Gui, Panel:Add, Text, vStatsHdr gToggleStats x12 y84 w160 h17 c%CText% BackgroundTrans, TIME
     Gui, Panel:Font, s8 Norm, Segoe UI

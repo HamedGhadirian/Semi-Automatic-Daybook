@@ -28,11 +28,13 @@ DaybookIniTemplate() {
 RunAsAdmin=0
 
 [Journal]
-; Write a note for each day. The top of it is yours to write in; under that,
-; between two markers, Daybook keeps a summary of the day - the tasks with
-; their notes, the habits, the time at the machine - and rewrites only that
-; part as the day goes. 0 and no note is written and none already there is
-; touched; the panel, the timer and the streaks carry on exactly as they are.
+; Write a note for each day. The top of it is your journal - the JOURNAL
+; heading on the panel opens it in a window, or write in it anywhere else;
+; under that, between two markers, Daybook keeps a summary of the day - the
+; tasks with their notes, the habits, the time at the machine - and rewrites
+; only that part as the day goes. 0 and no note is written and none already
+; there is touched; JOURNAL leaves the panel, and the panel, the timer and the
+; streaks carry on exactly as they are.
 Write=1
 
 ; Keep Daybook.md in the folder: where things stand - today's list and the long

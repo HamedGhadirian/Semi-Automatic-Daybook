@@ -30,6 +30,8 @@
 ;   Note       the box that opens beside a task you just marked
 ;   Missed     what a day ended without: did it, drop it, or back to today
 ;   SettingsWin  the settings window
+;   HabitWin   one habit's window: how often, its calendar, its streak
+;   JournalWin the journal window - your part of a day note
 ;   Tray       the tray icon's menu, and leaving tidily
 ;   Ini        the commented Daybook.ini written on the first run
 ;
@@ -63,6 +65,7 @@
 #Include %A_LineFile%\..\Missed.ahk
 #Include %A_LineFile%\..\SettingsWin.ahk
 #Include %A_LineFile%\..\HabitWin.ahk
+#Include %A_LineFile%\..\JournalWin.ahk
 #Include %A_LineFile%\..\Tray.ahk
 #Include %A_LineFile%\..\Ini.ahk
 #Include %A_LineFile%\..\Settings.ahk

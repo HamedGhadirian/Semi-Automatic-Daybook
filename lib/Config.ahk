@@ -17,7 +17,7 @@ global IniFile := CfgSeed(A_ScriptDir "\Daybook.ini", DaybookIniTemplate())
 
 ; Shown in the settings window and in the tray tip. MAJOR.MINOR.PATCH; a dash
 ; on the end makes it a test build, the way Vocab does it.
-global DaybookVersion := "1.0.1"
+global DaybookVersion := "1.1.0"
 
 ; Read a SECOND time here, and on purpose. Daybook.ahk has to know this before
 ; a single one of these files is loaded - deciding whether to relaunch itself

@@ -64,11 +64,11 @@ Plain markdown files, one `YYYY-MM-DD.md` per day, in `Documents\Daybook journal
 unless you pick another folder. Notepad opens them; **Obsidian is optional** -
 point the folder at your vault and they show up there.
 
-The top of each note is yours to write in; Daybook keeps a summary of the day
-at the bottom, and rewrites only that part:
+The top of each note is your journal; Daybook keeps a summary of the day at
+the bottom, and rewrites only that part:
 
 ```
-## my notes
+## journal
 
 A long day. The bike can wait.
 
@@ -83,13 +83,21 @@ active 6h 12m
 %% /daybook %%
 ```
 
-Right-click a task to give it a note; it lands beside the task. Tick a habit
-for yesterday and yesterday's note is corrected.
+**JOURNAL** on the panel opens that top part in a window - any day, saved as
+you type, a `- ` list carried on by Enter. It keeps no copy of its own: the
+note is the only place the words live, so Obsidian and the window are two ways
+into the same text. If both change it at once, it asks which one stays and
+keeps the other in `backups\journal-conflicts`.
+
+Right-click a task to give it a note - a line on why it was done, dropped or
+missed; it lands beside the task. Tick a habit for yesterday and yesterday's
+note is corrected.
 
 **`Daybook.md`** beside them is where things stand: your lists, the streaks,
 two weeks of habits. Change things on the panel; Obsidian follows.
 
-Don't want any of it? Settings → **Keep a journal** → no.
+Don't want any of it? Settings → **Keep a journal** → no. JOURNAL leaves the
+panel, and the panel, timer and streaks carry on.
 
 ## Keys
 

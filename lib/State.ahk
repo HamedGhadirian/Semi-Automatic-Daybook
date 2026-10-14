@@ -16,6 +16,7 @@ global NextTaskId   := 1         ; the id the next new task gets - see Tasks.ahk
 ; not?" given the next morning. {day, id, list, status, carry, note, text}, for
 ; PastKeepDays. CloseDay() fills it.
 global Past         := []
+global NoteBusy     := 0         ; Daybook is writing a day note - see DayNoteWrite()
 global PastTime     := {}        ; day -> that day's time-at-the-machine text
 global NoteFor      := ""        ; the note box is open for {id, day[, drop]}
 global StateNoSave  := 0         ; the state file could not be read OR set aside

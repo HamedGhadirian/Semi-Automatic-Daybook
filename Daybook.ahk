@@ -27,9 +27,12 @@
 ;   +                   add a task to that list; amber means something is owed.
 ;                       The box that opens from TODAY'S TASKS:
 ;                         Enter        add to Today
-;                         Shift+Enter  log as something you ALREADY did
 ;                         Ctrl+Enter   add to Long term
 ;                         Esc          cancel
+;                       A task always starts open. What already happened goes
+;                       in the journal, not on the list.
+;   JOURNAL             opens the journal window: your part of the day's note,
+;                       any day, saved as you type - see JournalWin.ahk
 ;   break / back        declare a break by hand, same as Win+F1
 ;
 ; HABITS - the first section, and the one that is the same every day
@@ -182,11 +185,15 @@
 ; handwritten journals in the folder above it - kept in its own subfolder so
 ; generated files never mix with the ones you wrote yourself.
 ;
-; The top of each note is YOURS - it opens with a "## my notes" heading - and
+; The top of each note is YOURS - it opens with a "## journal" heading - and
 ; Daybook keeps one block at the bottom, between two markers: the day's tasks
 ; with their notes, the habits, the time at the machine. Only that block is
 ; ever rewritten, as the day goes and when something about the day changes
 ; afterwards; nothing outside the markers is touched. See Journal.ahk.
+;
+; The JOURNAL heading on the panel opens that top part in a window of its own
+; (JournalWin.ahk). The window keeps no copy: it reads the note and writes it
+; back, so Obsidian and the window are two ways into the same words.
 ;
 ; Obsidian FOLLOWS the panel and never the other way: it cannot show a cross, a
 ; colour or a week of dots, so it is where you read and write, and the panel is

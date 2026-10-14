@@ -68,8 +68,8 @@ SetupTable() {
     d.Push({kind: "head", label: "THE JOURNAL"})
     d.Push({kind: "bool", sect: "Journal", key: "Write", var: "JournalOn"
           , label: "Keep a journal"
-          , hint: "A note a day: your writing on top, Daybook's summary under it."
-                . " No: nothing is written."})
+          , hint: "A note a day: your journal on top, Daybook's summary under it."
+                . " No: nothing is written, and JOURNAL leaves the panel."})
     d.Push({kind: "bool", sect: "Journal", key: "Board", var: "BoardOn"
           , label: "Write Daybook.md"
           , hint: "Where things stand: your lists, the streaks, two weeks of"
@@ -614,6 +614,8 @@ SetupApply() {
     ApplyPanelMode()                      ; the faded alpha, applied at rest
     ApplyPanelShape()                     ; and the corners, on the panel
     ApplyWindowKind()                     ; taskbar window or overlay
+    SetTrayJournal()                      ; the journal on or off
+    JrnSettingsChanged()
     ShapeWindow(SetupHwnd, PanelRound)    ; and on this window, as you watch
     EdgeState := -1, LastShownMin := 9999 ; make the bar and the digits repaint
     Refresh()

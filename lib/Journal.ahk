@@ -6,8 +6,9 @@
 ; bottom - and rewrites that block as the day goes: the tasks with their notes,
 ; the habits, the time at the machine. Everything outside the markers is yours
 ; and goes back exactly as it came out, so whatever you write above the block
-; stays exactly as you wrote it. A new day's note opens with a "## my notes"
-; heading waiting for you. See DayNoteWrite().
+; stays exactly as you wrote it. A new day's note opens with a "## journal"
+; heading waiting for you - the part the journal window shows (JournalWin.ahk).
+; Notes from before 1.1 say "## my notes"; both are read. See DayNoteWrite().
 ;
 ; The block is at the BOTTOM so that rewriting it can never move the text you
 ; are typing: everything above it stays where it is.
@@ -66,7 +67,17 @@ DayMarkEnd() {
 ; change to the tasks or habits is written at once, and the time only rides
 ; along - or on its own at most every half hour. force writes regardless: the
 ; close of a day, and edits to a day already over.
+;
+; NoteBusy is up while it works: the journal window reads and writes the same
+; file, and a save landing between this read and this write would be undone.
 DayNoteWrite(day, force := false) {
+    global NoteBusy
+    was := NoteBusy, NoteBusy := 1
+    DayNoteWriteNow(day, force)
+    NoteBusy := was
+}
+
+DayNoteWriteNow(day, force) {
     global JournalOn, CurDay
     static last := {}
     if (!JournalOn || day = "")
@@ -104,7 +115,7 @@ DayNoteWrite(day, force := false) {
             return                       ; an old note - see above
         out := RTrim(s, "`r`n") nl nl blk nl
     } else
-        out := "# " day nl nl "## my notes" nl nl nl blk nl
+        out := "# " day nl nl "## journal" nl nl nl blk nl
     if (there && out == s) {
         last[day] := {bare: bare, at: A_TickCount}
         return

@@ -3,6 +3,23 @@
 Notable changes, newest first. The version is in `lib\Config.ahk`
 (`DaybookVersion`).
 
+## 1.1.0
+
+- **A journal window** - JOURNAL on the panel (or the tray) opens your part of the day's note; any day, saved as you type.
+- **One copy only** - the window reads and writes the note itself, so what you write in Obsidian is what it shows.
+- **Tasks start open** - Shift+Enter "already did it" is gone; what happened goes in the journal.
+
+<details>
+<summary>Everything that changed</summary>
+
+- New notes open with `## journal`; older ones with `## my notes` are still read.
+- Enter carries a `- ` / `1. ` / `- [ ] ` list on; Enter on an empty item ends it.
+- Changed in two places at once, the window asks which one stays and keeps the other in `backups\journal-conflicts`.
+- Today's word count beside the JOURNAL heading.
+- With the journal off, JOURNAL leaves the panel and its tray items are greyed out.
+
+</details>
+
 ## 1.0.1
 
 - **No tips through other windows** - a panel under another app no longer lights up, shows its tooltip or takes the mouse wheel.

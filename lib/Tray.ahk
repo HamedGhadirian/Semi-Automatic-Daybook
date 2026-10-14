@@ -28,7 +28,8 @@ BuildTray() {
     Menu, Tray, Add, Always on top, TrayOnTop
     Menu, Tray, Add, Quick capture, TrayAdd
     Menu, Tray, Add
-    Menu, Tray, Add, Open today's journal, TrayJournal
+    Menu, Tray, Add, Write in the journal, TrayWrite
+    Menu, Tray, Add, Open today's note, TrayJournal
     Menu, Tray, Add, Open the journal folder, TrayFolder
     Menu, Tray, Add
     Menu, Tray, Add, Settings, TraySettings
@@ -41,6 +42,16 @@ BuildTray() {
     TrayReady := true
     SetTrayOnTop()
     SetTrayMode()
+    SetTrayJournal()
+}
+
+; The journal's three items say nothing while it is off - there is no note to
+; write in or open. Called again whenever the settings change.
+SetTrayJournal() {
+    global JournalOn
+    act := JournalOn ? "Enable" : "Disable"
+    for _, item in ["Write in the journal", "Open today's note", "Open the journal folder"]
+        Menu, Tray, %act%, %item%
 }
 
 ; A bare file name means a file next to Daybook.ahk, which is how an icon
@@ -75,16 +86,21 @@ TrayAdd:
     QuickAdd()
 Return
 
+TrayWrite:
+    JrnShow()
+Return
+
 TrayJournal:
     JFile := JournalFile(LogicalDay())
     if (FileExist(JFile))
         Run, %JFile%
-    else
+    else if (InStr(FileExist(JournalDir), "D"))
         Run, %JournalDir%
 Return
 
 TrayFolder:
-    Run, %JournalDir%
+    if (InStr(FileExist(JournalDir), "D"))
+        Run, %JournalDir%
 Return
 
 TraySettings:

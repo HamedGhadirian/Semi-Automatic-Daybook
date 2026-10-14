@@ -48,6 +48,18 @@ OpenNote(i, mode, rowY := 0) {
     global Asked
     Asked := "note " mode
 }
+; the journal window's surroundings - only its file parts are tested here
+global NoteBusy := 0
+LivePanel(ByRef x, ByRef y, ByRef w, ByRef h) {
+}
+ClampWin(ByRef x, ByRef y, w, h) {
+}
+TaskbarId(hwnd, id) {
+}
+SetupDark(hwnd) {
+}
+ShapeWindow(hwnd, round) {
+}
 
 #Include %A_ScriptDir%\..\lib\Day.ahk
 #Include %A_ScriptDir%\..\lib\Journal.ahk
@@ -111,7 +123,7 @@ SetStatus(4, "done")
 AppSec := {"ck3": 3600}, HourSec := {"14|ck3": 3600}   ; rides along with the next change
 HabitSetDay(1, yday)
 f := Note(yday)
-Has("note: made with its heading",   f, "# " yday "`n`n## my notes`n")
+Has("note: made with its heading",   f, "# " yday "`n`n## journal`n")
 Has("block: starts with its marker", f, "%% daybook:")
 Has("block: a task with its note",   f, "- " tick " buy milk  " dash " got the oat one`n")
 Has("block: crossed",                f, "- " cross " fix the bike`n")
@@ -124,7 +136,7 @@ Has("block: time",                   f, "### time at the machine`n`nactive 1h 0m
 Has("block: ends with its marker",   f, "%% /daybook %%")
 
 ; ---- your writing, above and below, is never touched ------------------------
-f := StrReplace(f, "## my notes`n`n`n", "## my notes`n`nA long day. I liked it.`n`n")
+f := StrReplace(f, "## journal`n`n`n", "## journal`n`nA long day. I liked it.`n`n")
 f .= "`nPS written under the block`n"
 Put(yday, f)
 SetStatus(2, "done")
@@ -157,7 +169,7 @@ Has("closed note: still open",       f, "- " box " call mom`n")
 Has("closed note: time kept",        f, "active 2h 0m")
 Ok("closed note: your words still once", Count(f, "A long day. I liked it."), 1)
 t := Note(today)
-Has("today's note made",             t, "# " today "`n`n## my notes")
+Has("today's note made",             t, "# " today "`n`n## journal")
 Hasnt("today: a missed task is not on today's list", t, "call mom")
 Hasnt("today: not yesterday's done", t, "buy milk")
 
@@ -276,6 +288,45 @@ Ok("pruned: the record",   gone, 1)
 Ok("pruned: its time",     PastTime.HasKey(DayShift(today, -60)) ? 0 : 1, 1)
 Ok("kept: yesterday",      PastTime.HasKey(yday) ? 1 : 0, 1)
 
+;================================================================================
+; The journal window's reading and writing (no window - its parts)
+;================================================================================
+j1 := DayShift(today, -100), j2 := DayShift(today, -101), j3 := DayShift(today, -102)
+blk := DayMarkStart() "`n## the day`n" DayMarkEnd() "`n"
+
+; a note from before 1.1: the old heading is found, the body is what is under it
+old := "# " j1 "`n`n## my notes`n`nhello`n- a`n`n" blk
+Put(j1, old)
+r := JrnRead(j1)
+Ok("journal: old heading read",      r.body, "hello`n- a")
+Ok("journal: the head ends at it",   SubStr(r.head, -10), "## my notes")
+Ok("journal: unchanged goes back as it was", JrnCompose(r, j1, r.body) == old ? 1 : 0, 1)
+Put(j1, JrnCompose(r, j1, "hello`n- a`n- b"))
+f := Note(j1)
+Has("journal: new body in place",    f, "## my notes`n`nhello`n- a`n- b`n`n%% daybook:")
+Ok("journal: block still once",      Count(f, "%% daybook:"), 1)
+Ok("journal: words",                 JrnWords(j1), 3)
+
+; no note yet: made in the shape a new day gets
+r := JrnRead(j2)
+Ok("journal: no note",               r.exists ? 1 : 0, 0)
+Ok("journal: a new note",            JrnCompose(r, j2, "first words"), "# " j2 "`n`n## journal`n`nfirst words`n")
+
+; CRLF stays CRLF; a title and no heading: the rest of the top is the body
+Put(j3, "# " j3 "`r`n`r`nsome text`r`n`r`n" StrReplace(blk, "`n", "`r`n"))
+r := JrnRead(j3)
+Ok("journal: title only, body",      r.body, "some text")
+out := JrnCompose(r, j3, "some text`nmore")
+Has("journal: CRLF kept",            out, "some text`r`nmore`r`n`r`n%% daybook:")
+Hasnt("journal: no bare LF",         StrReplace(out, "`r`n"), "`n")
+
+; read short - a marker and no end - is reported, so it is never saved over
+Put(j3, "# " j3 "`n`n## journal`n`nhalf`n`n%% daybook: written by")
+Ok("journal: short read seen",       JrnRead(j3).short ? 1 : 0, 1)
+
+; Daybook's own writers raise the flag, and lower it again
+Ok("journal: NoteBusy down after a write", NoteBusy ? 1 : 0, 0)
+
 FileDelete, %A_ScriptDir%\results-Day.txt
 FileAppend, % (Fails ? Fails " FAILED`n" : "all passed`n") Log
     , %A_ScriptDir%\results-Day.txt, UTF-8
@@ -283,3 +334,4 @@ ExitApp
 
 ; last: it has a menu label, which would end the auto-execute section above
 #Include %A_ScriptDir%\..\lib\Missed.ahk
+#Include %A_ScriptDir%\..\lib\JournalWin.ahk

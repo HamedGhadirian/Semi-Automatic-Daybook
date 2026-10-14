@@ -1,10 +1,12 @@
 ﻿;================================================================================
 ; Laying the panel out - where every section and row ends up
 ;================================================================================
-; Lay out whatever is open, top to bottom: HABITS, MISSED (only when there is
-; something in it), TODAY'S TASKS, LONG TERM TASKS, TIME AT THE MACHINE.
+; Lay out whatever is open, top to bottom: JOURNAL (while the journal is on),
+; HABITS, MISSED (only when there is something in it), TODAY'S TASKS, LONG
+; TERM TASKS, TIME AT THE MACHINE.
 ;
-; Habits come first because they are the part that is the same every morning -
+; The journal heads the panel - one line, the door to the day's writing. Then
+; habits, because they are the part that is the same every morning -
 ; a list you glance at and clear, above the list you think about. The two task
 ; lists share one pool of row controls, so a row's index in the pool has
 ; nothing to do with which task is in it.
@@ -41,6 +43,16 @@ Relayout() {
     ; their own y and never move: the bar and the minutes are what the panel is
     ; for, and a readout you have to scroll to is not a readout.
     y -= PanelScrollY
+
+    ; ---- Journal - first, a heading that opens a window, nothing under it
+    if (JournalOn) {
+        PlaceHdr(y, 20, {"JrnHdr": "y" y
+                   , "JrnCnt": "x" (HdrNumR - 96) " y" (y + 2) " w96"})
+        y += 22
+    } else {
+        GuiControl, Panel:Hide, JrnHdr
+        GuiControl, Panel:Hide, JrnCnt
+    }
 
     ; ---- Habits
     PlaceHdr(y, 20, {"HabHdr": "y" y
@@ -473,6 +485,7 @@ Refresh() {
     col := owed ? CAmber : CMuted
     GuiControl, Panel:+c%col%, AddBtn
     GuiControl, Panel:, AddBtn, +
+    JrnPanelCount()
     LastShownMin := 9999
     UpdateTimerText()
     SetStatusText()
