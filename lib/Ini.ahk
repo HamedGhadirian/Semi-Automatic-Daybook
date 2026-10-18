@@ -42,6 +42,13 @@ Write=1
 ; Daybook whenever something changes; change things on the panel, not in it.
 Board=1
 
+; Look back: a note for each week that ends (2026-W42.md), and for each
+; month - the days you wrote, the time at the machine, the tasks, the
+; habits - with a few questions on top that are yours. A month that is over
+; is packed: its days and weeks move into 2026\2026-10 October\. Plus a
+; year note, a line a month. Files are moved, never deleted. 0 = off.
+RollUp=0
+
 ; The folder the daily journal files go in, one YYYY-MM-DD.md per day. Created
 ; if it is missing. BLANK means a Daybook journal folder inside Documents.
 Folder=

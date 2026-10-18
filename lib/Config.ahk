@@ -36,6 +36,10 @@ global JournalDir    := CfgStrDef(IniFile, "Journal", "Folder", A_MyDocuments "\
 ; notes, the streaks, two weeks of habits. Written by Daybook only; see
 ; Board.ahk. Independent of Write.
 global BoardOn       := CfgBool(IniFile, "Journal", "Board", true)
+; Weeks, months and a year: summaries written from the day notes, and each
+; month that is over packed into a folder of its own. See Rollup.ahk. Off
+; until you turn it on - it is the one thing that moves your files.
+global RollupOn      := CfgBool(IniFile, "Journal", "RollUp", false)
 ; How long a finished day's list is kept, so that its note can still be
 ; corrected - and, later, so a week or a month can be looked back over.
 global PastKeepDays  := 42

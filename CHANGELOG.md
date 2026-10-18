@@ -7,7 +7,9 @@ Notable changes, newest first. The version is in `lib\Config.ahk`
 
 - **A journal window** - JOURNAL on the panel (or the tray) opens your part of the day's note; any day, saved as you type.
 - **One copy only** - the window reads and writes the note itself, so what you write in Obsidian is what it shows.
+- **Titles for days** - a title box in the journal window names the file (`2026-10-14 world cup.md`); Daybook finds a day by its date, so a renamed note is never lost.
 - **Tasks start open** - Shift+Enter "already did it" is gone; what happened goes in the journal.
+- **Weeks and months** - a note for each week, month and year, from the day notes; a month that is over is packed into its own folder. Off until you turn it on.
 
 <details>
 <summary>Everything that changed</summary>
@@ -16,6 +18,7 @@ Notable changes, newest first. The version is in `lib\Config.ahk`
 - Enter carries a `- ` / `1. ` / `- [ ] ` list on; Enter on an empty item ends it.
 - Changed in two places at once, the window asks which one stays and keeps the other in `backups\journal-conflicts`.
 - Today's word count beside the JOURNAL heading.
+- A day's note is found in the journal folder or its month folders (`2026\2026-10 October\`). Two notes for one day: an empty one Daybook made is folded into yours (kept in `backups\notes\folded`); two with words are both left alone and the window says so.
 - With the journal off, JOURNAL leaves the panel and its tray items are greyed out.
 
 </details>

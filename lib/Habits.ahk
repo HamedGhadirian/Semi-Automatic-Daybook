@@ -551,7 +551,7 @@ HabitFixNoteNow(day, name, did) {
     global JournalOn
     if (!JournalOn)
         return
-    f := JournalFile(day)
+    f := JournalFile(day, true)
     if (!FileExist(f))
         return
     FileRead, s, *P65001 %f%

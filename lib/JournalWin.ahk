@@ -76,9 +76,17 @@ JrnBuild() {
     opt := "vJrnWhen gJrnToday x" (L + 34) " y38 w" (W - 2 * L - 68) " h16 Center BackgroundTrans"
     Gui, JrnEd:Add, Text, %opt%
 
+    ; ---- the day's title: it goes in the file name, after the date
+    Gui, JrnEd:Font, s10 Bold c%CText%, Segoe UI
+    opt := "vJrnName gJrnNamed x" L " y62 w" (W - 2 * L) " h24 -E0x200"
+    Gui, JrnEd:Add, Edit, %opt%
+    GuiControlGet, hNm, JrnEd:Hwnd, JrnName
+    DllCall("SendMessage", "ptr", hNm, "uint", 0xD3, "ptr", 3, "ptr", 8 | (8 << 16))
+    DllCall("SendMessage", "ptr", hNm, "uint", 0x1501, "ptr", 1, "wstr", "a title for the day - optional, it names the file")
+
     ; ---- the writing. WantTab, so Tab indents a list the way Obsidian does.
     ; Enter is the key below, not the box's own: it carries a list on.
-    y := 62
+    y := 96
     JrnEdY := y, JrnEdH := 440
     Gui, JrnEd:Font, s10 Norm c%CText%, Segoe UI
     opt := "vJrnEdit gJrnTyped x" L " y" y " w" (W - 2 * L) " h" JrnEdH " -E0x200 +Multi +VScroll +WantTab"
@@ -134,8 +142,10 @@ JrnBuild() {
 ;
 ; No journal heading - an old note, or one somebody tidied - and the title line
 ; alone is the head. No title either, and the whole top is the body.
-JrnRead(day) {
-    f := JournalFile(day)
+;
+; fold: the caller is about to write - see JournalFile().
+JrnRead(day, fold := false) {
+    f := JournalFile(day, fold)
     r := {f: f, exists: false, ok: true, short: false, nl: "`n", s: ""
         , head: "", body: "", tail: ""}
     if (!FileExist(f))
@@ -205,9 +215,16 @@ JrnWords(day) {
 ; The panel heading's number: today's words, or nothing yet.
 JrnPanelCount() {
     global JournalOn
+    static seen := "", n := 0
     if (!JournalOn)
         return
-    n := JrnWords(LogicalDay())
+    ; every relayout asks - the note is read again only once its name, time or
+    ; size says it changed
+    f := JournalFile(LogicalDay())
+    FileGetTime, at, %f%
+    FileGetSize, size, %f%
+    if ((f "|" at "|" size) != seen)
+        n := JrnWords(LogicalDay()), seen := f "|" at "|" size
     GuiControl, Panel:, JrnCnt, % n ? n " words" : ""
 }
 
@@ -215,16 +232,21 @@ JrnPanelCount() {
 ; Loading and saving
 ;================================================================================
 JrnLoad(day) {
-    global JrnDay, JrnBase, JrnAsk
+    global JrnDay, JrnBase, JrnAsk, JrnNameBase, JournalTwins
+    JournalTwins := ""
     r := JrnRead(day)
     JrnDay := day
     JrnBase := r.body
+    JrnNameBase := r.exists ? JournalTitleOf(r.f) : ""
     JrnAsk := 0
     JrnAskShow(false)
     GuiControl, JrnEd:, JrnEdit, % r.body
+    GuiControl, JrnEd:, JrnName, %JrnNameBase%
     JrnPaintDay()
     if (!r.ok)
         JrnSay("could not read the note", true)
+    else if (JournalTwins = day)
+        JrnSay("two notes for this day!", true)
     else
         JrnSay(r.exists ? "" : "no note yet")
 }
@@ -275,7 +297,7 @@ JrnSave() {
         SetTimer, JrnAutoSave, -300
         return "busy"
     }
-    r := JrnRead(JrnDay)
+    r := JrnRead(JrnDay, true)
     if (!r.ok || r.short) {
         JrnSay("could not read the note - trying again", true)
         SetTimer, JrnAutoSave, -3000
@@ -301,6 +323,50 @@ JrnSave() {
         DayNoteWrite(JrnDay, true)       ; a new note for today gets its block now
     if (JrnDay = LogicalDay())
         JrnPanelCount()
+    return "saved"
+}
+
+; The title box to the file name, if it has changed. A day with no note yet
+; gets one first, so there is a file to name. Same answers as JrnSave().
+JrnSaveName() {
+    global JrnDay, JrnBase, JrnAsk, NoteBusy, JrnNameBase
+    Critical
+    GuiControlGet, t, JrnEd:, JrnName
+    ; the box as it was filled is no change - even a title from Obsidian that
+    ; the cleaning below would spell another way (too long, two spaces)
+    if (t == JrnNameBase)
+        return "same"
+    t := JournalCleanTitle(t)
+    if (t == JrnNameBase)
+        return "same"
+    if (JrnAsk)
+        return "asking"
+    if (NoteBusy) {
+        SetTimer, JrnNameSave, -300
+        return "busy"
+    }
+    r := JrnRead(JrnDay, true)
+    if (!r.ok || r.short) {
+        JrnSay("could not read the note - trying again", true)
+        SetTimer, JrnNameSave, -3000
+        return "failed"
+    }
+    if (!r.exists) {
+        if (!JrnWrite(r.f, JrnCompose(r, JrnDay, JrnBase))) {
+            JrnSay("could not save - trying again", true)
+            SetTimer, JrnNameSave, -3000
+            return "failed"
+        }
+        if (JrnDay = LogicalDay())
+            DayNoteWrite(JrnDay, true)
+    }
+    if (JournalRetitle(JrnDay, t) = "") {
+        JrnSay("could not rename - that name is taken?", true)
+        return "failed"
+    }
+    JrnNameBase := t
+    FormatTime, hm, , HH:mm
+    JrnSay("named " hm)
     return "saved"
 }
 
@@ -385,6 +451,15 @@ JrnTyped:
     SetTimer, JrnAutoSave, -1500
 Return
 
+JrnNamed:
+    SetTimer, JrnNameSave, -1500
+Return
+
+JrnNameSave:
+    if (JrnSaveName() != "busy" && JrnClosing)
+        JrnClose()
+Return
+
 JrnAutoSave:
     if (JrnSave() = "saved" && JrnClosing)
         JrnHide()
@@ -396,7 +471,7 @@ JrnWatch:
 Return
 
 JrnLook() {
-    global JrnHwnd, JrnDay, JrnBase, JrnAsk
+    global JrnHwnd, JrnDay, JrnBase, JrnAsk, JrnNameBase
     if (!DllCall("IsWindowVisible", "ptr", JrnHwnd)) {
         SetTimer, JrnWatch, Off
         return
@@ -404,7 +479,16 @@ JrnLook() {
     if (JrnAsk || !(JrnText() == JrnBase))
         return                           ; typing - the save will look
     r := JrnRead(JrnDay)
-    if (!r.ok || r.short || r.body == JrnBase)
+    if (!r.ok || r.short)
+        return
+    ; renamed somewhere else - Obsidian, Explorer - and not being typed here
+    GuiControlGet, t, JrnEd:, JrnName
+    if (r.exists && t == JrnNameBase
+        && !(JournalTitleOf(r.f) == JrnNameBase)) {
+        JrnNameBase := JournalTitleOf(r.f)
+        GuiControl, JrnEd:, JrnName, %JrnNameBase%
+    }
+    if (r.body == JrnBase)
         return
     JrnBase := r.body
     GuiControlGet, hEd, JrnEd:Hwnd, JrnEdit
@@ -434,6 +518,9 @@ Return
 ; The day you were on is saved before another one is opened - and if it
 ; cannot be, you stay on it.
 JrnGo(day) {
+    res := JrnSaveName()
+    if (res = "busy" || res = "failed")
+        return
     res := JrnSave()
     if (res = "asking" || res = "failed" || res = "busy")
         return
@@ -441,6 +528,7 @@ JrnGo(day) {
 }
 
 JrnOpenFile:
+    JrnSaveName()
     JrnSave()
     if (FileExist(JournalFile(JrnDay)))
         Run, % JournalFile(JrnDay)
@@ -457,6 +545,15 @@ Return
 ; the window once it lands; the two-editors question keeps it open.
 JrnClose() {
     global JrnClosing
+    res := JrnSaveName()
+    if (res = "busy") {
+        JrnClosing := 1                  ; JrnNameSave closes it once the name lands
+        return
+    }
+    if (res = "failed") {
+        JrnClosing := 0
+        return
+    }
     res := JrnSave()
     if (res = "busy" || res = "failed") {
         JrnClosing := 1
@@ -471,6 +568,7 @@ JrnHide() {
     global JrnClosing
     JrnClosing := 0
     SetTimer, JrnAutoSave, Off
+    SetTimer, JrnNameSave, Off
     SetTimer, JrnWatch, Off
     Gui, JrnEd:Hide
 }
@@ -491,6 +589,11 @@ JrnSettingsChanged() {
 ; plain new line.
 JrnEnter() {
     GuiControlGet, foc, JrnEd:FocusV
+    if (foc = "JrnName") {               ; Enter on the title: named, and on to the writing
+        JrnSaveName()
+        GuiControl, JrnEd:Focus, JrnEdit
+        return
+    }
     if (foc != "JrnEdit")
         return
     GuiControlGet, hEd, JrnEd:Hwnd, JrnEdit

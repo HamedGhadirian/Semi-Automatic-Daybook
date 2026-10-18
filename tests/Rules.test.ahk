@@ -39,7 +39,7 @@ PendMark(kind, i, status) {
 }
 DayNoteWrite(day, force := false) {
 }
-JournalFile(day) {
+JournalFile(day, fold := false) {
     return ""
 }
 

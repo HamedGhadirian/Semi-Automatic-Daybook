@@ -15,6 +15,7 @@ BuildNote()
 WatchDisplay()
 
 RollIfNeeded()
+RollupRun()                  ; weeks and months that ended while it was closed
 Journal(Chr(0x00B7) " session start")
 
 BuildTray()

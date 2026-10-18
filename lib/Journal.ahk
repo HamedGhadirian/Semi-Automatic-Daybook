@@ -18,8 +18,194 @@
 ; vault: nobody reads it in the normal run of things, it is where to look when
 ; a number seems wrong. Journal() and JournalNote() write to it.
 ;================================================================================
-JournalFile(day) {
-    return JournalDir "\" day ".md"
+;================================================================================
+; Which file is a day's note
+;================================================================================
+; The one whose name STARTS with the date: 2026-10-14.md, or 2026-10-14 world
+; cup.md once it has a title - the journal window's title box renames it, and
+; so can you, in Obsidian or anywhere. The date is all Daybook looks at, so a
+; title never hides a day from it. Looked for in the journal folder, and in the
+; month folders the roll-up files days into (2026\2026-10 October\).
+;
+; Looked up afresh every time - a rename in Obsidian is seen at once, and the
+; Loop below is the system's own file search, quick on any folder size.
+;
+; Two files for one day: if the plain one has nothing of yours in it - Daybook
+; made it before the titled one turned up - the titled one is the day's note.
+; A writer (fold true - they hold NoteBusy, or are Critical) also folds the
+; plain one into it: its block moves over, the file goes to backups\notes\
+; folded, and the day is one file again. A lookup that only reads never moves
+; a file - it may run on a timer in the middle of a writer. If both have your
+; words, neither is touched: the plain one is used, and JournalTwins names the
+; day so the journal window can say so.
+JournalFile(day, fold := false) {
+    global JournalDir, JournalTwins
+    found := JournalFind(day)
+    if (found.Length() = 0)
+        return JournalDir "\" day ".md"
+    if (found.Length() = 1)
+        return found[1]
+    plain := "", named := []
+    for _, f in found {
+        SplitPath, f, name
+        if (name = day ".md")
+            plain := f
+        else
+            named.Push(f)
+    }
+    if (plain != "" && named.Length() = 1) {
+        FileRead, p, *P65001 %plain%
+        if (!ErrorLevel && NoteUserPart(p) = "") {
+            if (fold)
+                JournalFold(day, plain, named[1])
+            return named[1]
+        }
+    }
+    JournalTwins := day
+    return plain != "" ? plain : found[1]
+}
+
+JournalFind(day) {
+    global JournalDir
+    found := []
+    dirs := [JournalDir]
+    y := SubStr(day, 1, 4), m := SubStr(day, 1, 7)
+    Loop, Files, %JournalDir%\%y%\%m%*, D
+        dirs.Push(A_LoopFileFullPath)
+    for _, dir in dirs
+        Loop, Files, %dir%\%day%*.md
+            if (A_LoopFileName = day ".md" || SubStr(A_LoopFileName, 11, 1) = " ")
+                found.Push(A_LoopFileFullPath)
+    return found
+}
+
+; The title in a note's file name: what comes after the date, or "".
+JournalTitleOf(f) {
+    SplitPath, f, , , , name
+    return Trim(SubStr(name, 12))
+}
+
+; A title as a file name can carry it: no \ / : * ? " < > | (Windows will not
+; have them) and no # ^ [ ] (an Obsidian link to the note would break on
+; them), no dots or spaces at the end, one space between words, not too long.
+; A date typed in front of it is taken off - the date is already there.
+JournalCleanTitle(t) {
+    t := RegExReplace(t, "[\\/:*?""<>|#^\[\]\r\n\t]", " ")
+    t := RegExReplace(t, "^\s*\d{4}-\d\d-\d\d\b")
+    t := Trim(RegExReplace(t, "\s+", " "))
+    t := SubStr(t, 1, 80)
+    return RTrim(t, ". ")
+}
+
+; Give a day's note a title, or take it away: the file is renamed in place.
+; Returns the new path, or "" when it could not be - another file already has
+; that name, or the note is held open. There must be a note to rename.
+;
+; A note whose first line IS its old title - the older notes, "# world cup" -
+; gets the new one there too, so the two never disagree. A first line that is
+; anything else (Daybook's "# 2026-10-14", or your own words) is left alone.
+JournalRetitle(day, title) {
+    f := JournalFile(day, true)
+    if (!FileExist(f))
+        return ""
+    SplitPath, f, , dir
+    t := JournalCleanTitle(title)
+    g := dir "\" day (t != "" ? " " t : "") ".md"
+    if (g == f)
+        return f
+    ; a change of case alone is the same file to Windows - overwrite is how
+    ; MoveFileEx is told to go ahead with it
+    same := (g = f)
+    if (!same && FileExist(g))
+        return ""
+    was := JournalTitleOf(f)
+    moved := false
+    Loop 3 {
+        FileMove, %f%, %g%, %same%
+        ; ErrorLevel counts files that failed - a source gone missing meanwhile
+        ; is no failure to it, so the new name is looked for as well
+        if (!ErrorLevel && FileExist(g)) {
+            moved := true
+            break
+        }
+        Sleep, 150
+    }
+    if (!moved)
+        return ""
+    if (was != "")
+        JournalRetitleHead(g, was, t != "" ? t : day)
+    return g
+}
+
+JournalRetitleHead(f, was, now) {
+    FileRead, s, *P65001 %f%
+    if (ErrorLevel)
+        return
+    nl := InStr(s, "`r`n") ? "`r`n" : "`n"
+    first := SubStr(s, 1, (p := InStr(s, nl)) ? p - 1 : StrLen(s))
+    if !(Trim(first) == "# " was)
+        return
+    out := "# " now SubStr(s, StrLen(first) + 1)
+    tmp := f ".tmp"
+    FileDelete, %tmp%
+    FileAppend, %out%, *%tmp%, UTF-8
+    if (!ErrorLevel)
+        FileMove, %tmp%, %f%, 1
+    FileDelete, %tmp%
+}
+
+; Fold a plain note Daybook made into the titled one beside it - only when the
+; plain one holds none of your words. Its block goes to the titled note if that
+; has none; the plain file is moved, not deleted, to backups\notes\folded.
+JournalFold(day, plain, named) {
+    global StateFile
+    FileRead, p, *P65001 %plain%
+    if (ErrorLevel)
+        return false
+    if (NoteUserPart(p) != "")
+        return false
+    FileRead, n, *P65001 %named%
+    if (ErrorLevel)
+        return false
+    a := InStr(p, "%% daybook:", true)
+    b := a ? InStr(p, DayMarkEnd(), true, a) : 0
+    if (a && !b)
+        return false                     ; read short - leave both for now
+    if (a && !InStr(n, "%% daybook:", true)) {
+        nl := InStr(n, "`r`n") ? "`r`n" : "`n"
+        blk := SubStr(p, a, b + StrLen(DayMarkEnd()) - a)
+        blk := StrReplace(StrReplace(blk, "`r"), "`n", nl)
+        out := RTrim(n, "`r`n") nl nl blk nl
+        tmp := named ".tmp"
+        FileDelete, %tmp%
+        FileAppend, %out%, *%tmp%, UTF-8
+        if (ErrorLevel)
+            return false
+        FileMove, %tmp%, %named%, 1
+        if (ErrorLevel)
+            return false
+    }
+    SplitPath, StateFile, , dir
+    if (dir = "")
+        dir := A_ScriptDir
+    dir .= "\backups\notes\folded"
+    if (!InStr(FileExist(dir), "D"))
+        FileCreateDir, %dir%
+    FormatTime, hms, , HHmmss
+    FileMove, %plain%, %dir%\%day%-%hms%.md, 1
+    return !ErrorLevel
+}
+
+; Your words in a note: everything above Daybook's block, less the title line
+; and the "## journal" heading. "" when there are none.
+NoteUserPart(s) {
+    t := StrReplace(s, "`r")
+    if (a := InStr(t, "%% daybook:", true))
+        t := SubStr(t, 1, a - 1)
+    t := RegExReplace(t, "^\x{FEFF}")
+    t := RegExReplace(t, "^#[ \t][^\n]*")
+    t := RegExReplace(t, "im`n)^##[ \t]+(journal|my notes)[ \t]*$")
+    return Trim(t, " `t`n")
 }
 
 TS() {
@@ -88,7 +274,7 @@ DayNoteWriteNow(day, force) {
         && A_TickCount - last[day].at < 30 * 60000)
         return
     block := DayBlock(day, true)
-    f := JournalFile(day)
+    f := JournalFile(day, true)
     there := FileExist(f)
     s := ""
     if (there) {

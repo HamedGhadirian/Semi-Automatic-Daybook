@@ -61,7 +61,9 @@ Amber at 30 minutes and red at 45, five minutes for a break: all settings.
 ## The journal
 
 Plain markdown files, one `YYYY-MM-DD.md` per day, in `Documents\Daybook journal`
-unless you pick another folder. Notepad opens them; **Obsidian is optional** -
+unless you pick another folder. Give a day a title and it goes after the date -
+`2026-10-14 world cup.md`; Daybook only looks at the date, so rename freely.
+Notepad opens them; **Obsidian is optional** -
 point the folder at your vault and they show up there.
 
 The top of each note is your journal; Daybook keeps a summary of the day at
@@ -95,6 +97,14 @@ note is corrected.
 
 **`Daybook.md`** beside them is where things stand: your lists, the streaks,
 two weeks of habits. Change things on the panel; Obsidian follows.
+
+**Weeks and months** (Settings → on; off until you turn it on). Each week that
+ends gets `2026-W42.md`; each month that ends is packed into
+`2026\2026-10 October\` with a note of its own; `2026\2026 year.md` has a
+line a month. Numbers only - the days you wrote (linked, never copied), the
+time at the machine, the tasks, a habit grid - with a few questions on top for
+you. Files are moved, never deleted; tray → **Write the summaries again**
+rebuilds them.
 
 Don't want any of it? Settings → **Keep a journal** → no. JOURNAL leaves the
 panel, and the panel, timer and streaks carry on.

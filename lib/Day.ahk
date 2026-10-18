@@ -53,6 +53,7 @@ RollIfNeeded() {
     AppSec := {}, HourSec := {}
     HabitSettle()                ; yesterday is settled: chains kept or broken
     SaveState()
+    RollupRun()                  ; a week or a month may have just ended
     Refresh()
 }
 

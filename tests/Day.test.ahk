@@ -12,6 +12,7 @@
 SetBatchLines -1
 
 global DayStartHour := 3, HabitKeep := 372, HabitDays := 7, PastKeepDays := 42
+global RollupOn := 1
 global JournalOn := 1, BoardOn := 1, JournalDir := A_ScriptDir "\journal\day"
 global Tasks := [], Habits := [], Past := [], PastTime := {}, NoteFor := ""
 global CurDay := "", NextTaskId := 1
@@ -67,6 +68,7 @@ ShapeWindow(hwnd, round) {
 #Include %A_ScriptDir%\..\lib\Tasks.ahk
 #Include %A_ScriptDir%\..\lib\Habits.ahk
 #Include %A_ScriptDir%\..\lib\Log.ahk
+#Include %A_ScriptDir%\..\lib\Rollup.ahk
 
 Ok(name, got, want) {
     global Fails, Log
@@ -326,6 +328,162 @@ Ok("journal: short read seen",       JrnRead(j3).short ? 1 : 0, 1)
 
 ; Daybook's own writers raise the flag, and lower it again
 Ok("journal: NoteBusy down after a write", NoteBusy ? 1 : 0, 0)
+
+;================================================================================
+; A day's note found by its date, whatever its title
+;================================================================================
+t1 := DayShift(today, -200), t2 := DayShift(today, -201), t3 := DayShift(today, -202)
+Ok("name: no note, the plain name",  JournalFile(t1), JournalDir "\" t1 ".md")
+Put(t1, "# " t1 "`n`n## journal`n`nmine`n`n" blk)
+g := JournalRetitle(t1, "world cup")
+Ok("name: retitled",                 g, JournalDir "\" t1 " world cup.md")
+Ok("name: found by its date",        JournalFile(t1), g)
+Ok("name: the plain one is gone",    FileExist(JournalDir "\" t1 ".md") ? 1 : 0, 0)
+Ok("name: title read back",          JournalTitleOf(JournalFile(t1)), "world cup")
+Ok("name: the words came along",     JrnRead(t1).body, "mine")
+Ok("name: case only",                JournalRetitle(t1, "World Cup"), JournalDir "\" t1 " World Cup.md")
+Ok("name: title taken away",         JournalRetitle(t1, ""), JournalDir "\" t1 ".md")
+Ok("name: clean",                    JournalCleanTitle(t1 " a/b: c?.. "), "a b c")
+Ok("name: clean of link breakers",   JournalCleanTitle("C# [draft] ^x"), "C draft x")
+
+; an old note's first line is its title: it follows the rename
+FileDelete, % JournalDir "\" t1 ".md"
+hf := JournalDir "\" t1 " old title.md"
+FileAppend, % "# old title`r`n`r`ntext`r`n", *%hf%, UTF-8
+g := JournalRetitle(t1, "new title")
+FileRead, s, *P65001 %g%
+Ok("name: the first line follows",   s, "# new title`r`n`r`ntext`r`n")
+g := JournalRetitle(t1, "")
+FileRead, s, *P65001 %g%
+Ok("name: no title, the date",       s, "# " t1 "`r`n`r`ntext`r`n")
+; Daybook's own first line is the date, and stays
+JournalRetitle(t1, "again")
+FileRead, s, % "*P65001 " JournalFile(t1)
+Ok("name: a date first line stays",  SubStr(s, 1, 12), "# " t1)
+FileDelete, % JournalFile(t1)
+
+; a month folder, the roll-up's: still found
+FileCreateDir, % JournalDir "\" SubStr(t2, 1, 4) "\" SubStr(t2, 1, 7) " Month"
+mf := JournalDir "\" SubStr(t2, 1, 4) "\" SubStr(t2, 1, 7) " Month\" t2 " filed.md"
+FileAppend, x, *%mf%, UTF-8
+Ok("name: found in its month folder", JournalFile(t2), mf)
+
+; Daybook made a plain note, then a titled one turned up: folded into one
+Put(t3, "# " t3 "`n`n## journal`n`n`n" blk)
+tf := JournalDir "\" t3 " dream.md"
+FileAppend, % "# dream`n`nI dreamt`n", *%tf%, UTF-8
+Ok("fold: a read finds the titled one", JournalFile(t3), tf)
+Ok("fold: a read moves nothing",       FileExist(JournalDir "\" t3 ".md") ? 1 : 0, 1)
+Ok("fold: a writer folds",             JournalFile(t3, true), tf)
+Ok("fold: the plain one moved away",   FileExist(JournalDir "\" t3 ".md") ? 1 : 0, 0)
+FileRead, s, *P65001 %tf%
+Has("fold: block came over",           s, "I dreamt`n`n%% daybook:")
+Ok("fold: kept in backups",            FileExist(A_ScriptDir "\journal\backups\notes\folded\" t3 "-*.md") ? 1 : 0, 1)
+
+; both have words: neither touched, and the day is named
+pf := JournalDir "\" t3 ".md"
+FileAppend, % "# " t3 "`n`n## journal`n`nmine too`n", *%pf%, UTF-8
+JournalTwins := ""
+Ok("twins: the plain one is used",     JournalFile(t3), pf)
+Ok("twins: the day is named",          JournalTwins, t3)
+Ok("twins: both still there",          FileExist(tf) && FileExist(pf) ? 1 : 0, 1)
+
+;================================================================================
+; The roll-up
+;================================================================================
+Ok("roll: 12h 40m",                  RollSec("12h 40m"), 45600)
+Ok("roll: 35m",                      RollSec("35m"), 2100)
+Ok("roll: not a time",               RollSec("soon"), 0)
+; ISO weeks: 31 Dec 2026 is a Thursday, so its week is 2026's 53rd - and
+; 1 Jan 2027 is in it too
+w := RollWeek(WeekOf(DayNum("2027-01-01")) * 7 + 2)
+Ok("roll: week across new year",     w.name " " w.mon " " w.month, "2026-W53 2026-12-28 2026-12")
+Ok("roll: week name back to Monday", DayFromNum(RollWeekMon("2026-W53")), "2026-12-28")
+w := RollWeek(WeekOf(DayNum("2026-10-14")) * 7 + 2)
+Ok("roll: an ordinary week",         w.name " " w.mon " " w.sun, "2026-W42 2026-10-12 2026-10-18")
+w := RollWeek(WeekOf(DayNum("2026-09-30")) * 7 + 2)
+Ok("roll: Thursday decides the month", w.month, "2026-10")
+Ok("roll: month name, not the system's", RollMonthName("2026-10"), "October")
+
+; a day note read back the way DayBlock wrote it
+rd := DayShift(today, -400)
+Put(rd, "# " rd "`n`n## journal`n`nsome words here`n`n" DayMarkStart() "`n## the day`n`n### tasks`n`n"
+    . "- " tick " buy milk  " dot " long term  " dash " got the oat one`n"
+    . "- " cross " call bank`n- " box " fix bike  " dot " carried " Chr(0xD7) "2`n`n"
+    . "### time at the machine`n`nactive 2h 5m`n`nClaude 1h 30m " dot " dota2 35m`n`n"
+    . "       13  " Chr(0x2588) " Claude`n" DayMarkEnd() "`n")
+r := RollDay(rd)
+Ok("roll: your words counted",       r.words, 3)
+Ok("roll: three tasks",              r.tasks.Length(), 3)
+Ok("roll: a done one, its note",     r.tasks[1].status "|" r.tasks[1].text "|" r.tasks[1].note, "done|buy milk|got the oat one")
+Ok("roll: carried is not the name",  r.tasks[3].text "|" r.tasks[3].status, "fix bike|open")
+Ok("roll: dropped",                  r.tasks[2].status, "failed")
+Ok("roll: active time",              r.active, 7500)
+Ok("roll: programs",                 r.apps["Claude"] "|" r.apps["dota2"], "5400|2100")
+s := RollSum([rd, DayShift(rd, 1)])
+Ok("roll: summed",                   s.notes " " s.dataDays " " s.written.Length(), "1 1 1")
+
+; a month that is over is packed; this one stays loose
+FileRemoveDir, %JournalDir%, 1
+FileCreateDir, %JournalDir%
+old := DayShift(SubStr(today, 1, 7) "-01", -1)          ; last day of last month
+Put(old, "# " old "`n`n## journal`n`nold words`n`n" DayMarkStart() "`n## the day`n" DayMarkEnd() "`n")
+Put(today, "# " today "`n`n## journal`n`n`n" DayMarkStart() "`n## the day`n" DayMarkEnd() "`n")
+mo := SubStr(old, 1, 7)
+RollupRun(true)
+md := JournalDir "\" SubStr(mo, 1, 4) "\" mo " " RollMonthName(mo)
+Ok("pack: last month moved",         FileExist(md "\" old ".md") ? 1 : 0, 1)
+Ok("pack: not left loose",           FileExist(JournalDir "\" old ".md") ? 1 : 0, 0)
+Ok("pack: today stays loose",        FileExist(JournalDir "\" today ".md") ? 1 : 0, 1)
+Ok("pack: still found",              JournalFile(old), md "\" old ".md")
+Ok("pack: the month's note",         FileExist(md "\" mo " " RollMonthName(mo) ".md") ? 1 : 0, 1)
+FileRead, ms, % "*P65001 " md "\" mo " " RollMonthName(mo) ".md"
+Has("pack: it links the day",        ms, "[[" old "]]")
+Has("pack: questions are yours",     ms, "## journal`n`n- What was this month about?")
+Ok("pack: the year's note",          FileExist(JournalDir "\" SubStr(mo, 1, 4) "\" SubStr(mo, 1, 4) " year.md") ? 1 : 0, 1)
+; your words in a summary survive it being written again
+FileRead, ms, % "*P65001 " md "\" mo " " RollMonthName(mo) ".md"
+FileDelete, % md "\" mo " " RollMonthName(mo) ".md"
+FileAppend, % StrReplace(ms, "- What was this month about?", "- What was this month about?`nmine"), % "*" md "\" mo " " RollMonthName(mo) ".md", UTF-8
+RollupRun(true)
+FileRead, ms, % "*P65001 " md "\" mo " " RollMonthName(mo) ".md"
+Has("pack: your words kept",         ms, "about?`nmine`n")
+Ok("pack: block once",               Count(ms, "%% daybook:"), 1)
+RollupOn := 0
+
+;================================================================================
+; The window: built, never shown
+;================================================================================
+global CBg := "202020", CCard := "2a2a2a", CText := "ffffff", CMuted := "999999", PanelRound := 0
+w1 := DayShift(today, -300), w2 := DayShift(today, -301)
+long := "a title much longer than eighty characters, typed in Obsidian where nothing cuts it short at all"
+wf := JournalDir "\" w1 " " long ".md"
+FileAppend, % "# " w1 "`n`n## journal`n`nhi`n", *%wf%, UTF-8
+JrnBuild()
+JrnLoad(w1)
+Ok("window: a long title shown whole", JrnNameBase, long)
+Ok("window: untouched box, no rename", JrnSaveName(), "same")
+Ok("window: the file kept its name",   FileExist(wf) ? 1 : 0, 1)
+JrnLoad(w2)
+GuiControl, JrnEd:, JrnName, % "the big day"
+Ok("window: a title makes the note",   JrnSaveName(), "saved")
+Ok("window: named",                    FileExist(JournalDir "\" w2 " the big day.md") ? 1 : 0, 1)
+GuiControl, JrnEd:, JrnEdit, % "words here"
+Ok("window: words saved",              JrnSave(), "saved")
+FileRead, s, % "*P65001 " JournalDir "\" w2 " the big day.md"
+Has("window: in the titled file",      s, "words here")
+Ok("window: one file",                 FileExist(JournalDir "\" w2 ".md") ? 1 : 0, 0)
+; a title that cannot be had keeps you on the day
+; (the note held open with no sharing - a sync at work - so it cannot move)
+lock := FileOpen(JournalDir "\" w2 " the big day.md", "r -rwd")
+GuiControl, JrnEd:, JrnName, % "renamed"
+JrnGo(w1)
+Ok("window: rename failed, stays on the day", JrnDay, w2)
+lock.Close()
+Ok("window: then it goes through", JrnSaveName(), "saved")
+JrnGo(w1)
+Ok("window: and on to the next day", JrnDay, w1)
+Gui, JrnEd:Hide
 
 FileDelete, %A_ScriptDir%\results-Day.txt
 FileAppend, % (Fails ? Fails " FAILED`n" : "all passed`n") Log

@@ -27,7 +27,7 @@ global NoteDir := A_ScriptDir "\journal"
 
 DayNoteWrite(day, force := false) {
 }
-JournalFile(day) {
+JournalFile(day, fold := false) {
     global NoteDir
     return NoteDir "\" day ".md"
 }

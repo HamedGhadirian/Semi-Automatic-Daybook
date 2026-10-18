@@ -20,6 +20,7 @@
 ;   Day        when a day starts and what happens when it ends
 ;   Journal    the day note (Daybook's block + yours) and Daybook's own log
 ;   Board      Daybook.md - where things stand, written one way
+;   Rollup     the weeks, the months and the year, and packing months away
 ;   Store      Daybook-state.txt, and the [Saved] part of Daybook.ini
 ;   Panel      building the panel, painting it, and how much of it shows
 ;   Break      a break you declared by hand
@@ -54,6 +55,7 @@
 #Include %A_LineFile%\..\Day.ahk
 #Include %A_LineFile%\..\Journal.ahk
 #Include %A_LineFile%\..\Board.ahk
+#Include %A_LineFile%\..\Rollup.ahk
 #Include %A_LineFile%\..\Store.ahk
 #Include %A_LineFile%\..\Panel.ahk
 #Include %A_LineFile%\..\Break.ahk

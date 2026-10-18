@@ -74,6 +74,10 @@ SetupTable() {
           , label: "Write Daybook.md"
           , hint: "Where things stand: your lists, the streaks, two weeks of"
                 . " habits. Rewritten as things change."})
+    d.Push({kind: "bool", sect: "Journal", key: "RollUp", var: "RollupOn"
+          , label: "Weeks and months"
+          , hint: "A note for each week, month and year, from the day notes. A month"
+                . " that is over moves into a folder: 2026\2026-10 October."})
     d.Push({kind: "path", sect: "Journal", key: "Folder", var: "JournalDir"
           , label: "Folder", pick: "folder"
           , hint: "One YYYY-MM-DD.md per day goes here. It has to exist already"
