@@ -10,7 +10,7 @@ half that is thinking to you.
 AutoHotkey v1 · Windows only · **no internet, no account** - everything stays
 in two folders on your PC
 
-![The panel: habits with their streaks, missed tasks, today's and long term tasks, and where the day went](https://raw.githubusercontent.com/HamedPhixer/Semi-Automatic-Daybook/main/docs/images/panel.png)
+![The panel: habits with their streaks, missed tasks, today's and long term tasks, and where the day went](https://raw.githubusercontent.com/HamedGhadirian/Semi-Automatic-Daybook/main/docs/images/panel.png)
 
 ## What it does
 
@@ -22,7 +22,7 @@ away - click a dot again and a done day turns blue, frozen; once more and it
 is empty. Right-click a habit for its calendar, where you can also bring in a
 streak you kept somewhere else.
 
-![A habit's calendar: three times a week, every week kept, with the streak in weeks](https://raw.githubusercontent.com/HamedPhixer/Semi-Automatic-Daybook/main/docs/images/calendar.png)
+![A habit's calendar: three times a week, every week kept, with the streak in weeks](https://raw.githubusercontent.com/HamedGhadirian/Semi-Automatic-Daybook/main/docs/images/calendar.png)
 
 **Tasks.** One list for today, one for the short term (pick a deadline on a
 small calendar, or none), one for later. Tick or cross one and a small box opens to say why. Anything unfinished waits under MISSED: say which day you did
@@ -121,7 +121,7 @@ Everything else is a click on the panel.
 
 ## Install
 
-From [Releases](https://github.com/HamedPhixer/Semi-Automatic-Daybook/releases),
+From [Releases](https://github.com/HamedGhadirian/Semi-Automatic-Daybook/releases),
 either one:
 
 - **`-portable.zip`** - unzip it, run `Start Daybook.bat`. AutoHotkey is in the
@@ -132,7 +132,7 @@ either one:
 It makes its own `Daybook.ini` next to itself, with every setting commented.
 Tray icon → **Settings** is the same thing in a window.
 
-![Settings: every setting in one window, each with a line saying what it does](https://raw.githubusercontent.com/HamedPhixer/Semi-Automatic-Daybook/main/docs/images/settings.png)
+![Settings: every setting in one window, each with a line saying what it does](https://raw.githubusercontent.com/HamedGhadirian/Semi-Automatic-Daybook/main/docs/images/settings.png)
 
 <details>
 <summary><b>Does it spy on me?</b></summary>
