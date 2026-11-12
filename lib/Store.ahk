@@ -324,6 +324,13 @@ LoadState() {
     for _, t in Tasks
         if (t.list = "M" && t.since = "")
             t.since := DayShift(CurDay, -1)
+    ; A long term task cannot have failed at anything, but one moved there from
+    ; MISSED used to keep its xN. Cleared here, on the way in - every load, but
+    ; after the first one there is nothing left to clear (nothing adds to a
+    ; long term task's count any more).
+    for _, t in Tasks
+        if (t.list = "L" && t.carry)
+            t.carry := 0
 }
 
 ; The panel's own state lives under [Saved], below the settings. It used to be
@@ -333,7 +340,7 @@ LoadState() {
 LoadIni() {
     old := CfgSection(IniFile, "Panel")
     for k, v in old {
-        if k in X,Y,OpenToday,OpenLater,OpenLong,OpenStats,OpenHabits,PanelMode,Locked,OnTop,ClickThru
+        if k in X,Y,OpenToday,OpenLater,OpenLong,OpenShort,OpenStats,OpenHabits,PanelMode,Locked,OnTop,ClickThru
             IniWrite, %v%, %IniFile%, Saved, %k%
     }
     if (old.Count())
@@ -348,6 +355,7 @@ LoadIni() {
     IniRead, OpenLong, %IniFile%, Saved, OpenLong, NONE
     if (OpenLong = "NONE" || OpenLong = "ERROR")
         IniRead, OpenLong, %IniFile%, Saved, OpenLater, 0
+    IniRead, OpenShort, %IniFile%, Saved, OpenShort, 1
     IniRead, OpenStats, %IniFile%, Saved, OpenStats, 0
     IniRead, OpenHabits, %IniFile%, Saved, OpenHabits, 1
     IniRead, PanelLocked, %IniFile%, Saved, Locked, 0
@@ -380,6 +388,7 @@ SaveIni() {
     IniWrite, %PanelY%,    %IniFile%, Saved, Y
     IniWrite, %OpenToday%, %IniFile%, Saved, OpenToday
     IniWrite, %OpenMissed%, %IniFile%, Saved, OpenMissed
+    IniWrite, %OpenShort%, %IniFile%, Saved, OpenShort
     IniWrite, %OpenLong%,  %IniFile%, Saved, OpenLong
     IniWrite, %OpenStats%, %IniFile%, Saved, OpenStats
     IniWrite, %OpenHabits%, %IniFile%, Saved, OpenHabits

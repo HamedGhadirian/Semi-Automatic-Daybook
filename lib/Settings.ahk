@@ -21,10 +21,11 @@
 ;   Vocab.ahk has worked this way for a while - this is the same idea, spread
 ;   to the rest, with the reading put in one place instead of six.
 ;
-; TWO COPIES OF THIS FILE EXIST, and they are meant to be identical. Daybook is
-; published on its own, so it cannot #Include a file from outside its folder -
-; it carries its own copy at Daybook\lib\Settings.ahk. Change one and change
-; the other, or the day they differ will be a long one. Not every script uses
+; MORE THAN ONE COPY OF THIS FILE EXISTS, and they are meant to be identical.
+; The scripts published on their own cannot #Include a file from outside their
+; folder, so each carries a copy in its own lib\ - Daybook, WindowTools and
+; AutoScroll (WindowTools also carries Osd.ahk and Monitors.ahk). Change one
+; and copy it to the others, or the day they differ will be a long one. Not every script uses
 ; every reader here; a function with no caller in one copy is not dead code.
 ;
 ;

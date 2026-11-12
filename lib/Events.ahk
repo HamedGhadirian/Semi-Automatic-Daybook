@@ -34,6 +34,12 @@ ToggleToday:
     Relayout()
 Return
 
+ToggleShort:
+    OpenShort := !OpenShort
+    SaveIni()
+    Relayout()
+Return
+
 ToggleLong:
     OpenLong := !OpenLong
     SaveIni()
@@ -60,6 +66,10 @@ JrnHdrClick:
     JrnShow()
 Return
 
+ShortAddClick:
+    QuickAdd("S")
+Return
+
 LongAddClick:
     QuickAdd("L")
 Return
@@ -72,7 +82,22 @@ Return
 ; no cross and no note box - a habit you did not do today is simply not ticked,
 ; and tomorrow it asks again.
 HabChkClick:
+    ; done or not done, nothing else: freezing is the dots' job (a click goes
+    ; done -> frozen -> not done, see HabitCycleDay)
     HabitToggle(HabRow[SubStr(A_GuiControl, 7)])
+Return
+
+; A short word beside the pointer, gone by itself - for a click that did
+; something other than you might expect.
+FreezeSay(msg) {
+    CoordMode, ToolTip, Screen
+    MouseGetPos, mx, my
+    ToolTip, %msg%, % mx + 12, % my + 18, 8
+    SetTimer, FreezeSayOff, -2800
+}
+
+FreezeSayOff:
+    ToolTip, , , , 8
 Return
 
 BreakClick:
@@ -217,7 +242,8 @@ CommitMark() {
     ; built from the task as it stands NOW, which is what lets a rename inside
     ; the window correct the line before it is ever written
     if (st = "add")
-        Journal("+ added: " t.text ((t.list = "L") ? "   [long term]" : ""))
+        Journal("+ added: " t.text ((t.list = "L") ? "   [long term]"
+              : (t.list = "S") ? "   [short term" (t.due != "" ? ", due " t.due : "") "]" : ""))
     else if (st = "unplanned")
         Journal(Chr(0x2713) " (unplanned) " t.text)
     else if (t.status = st)         ; changed its mind in the meantime: drop it
@@ -244,7 +270,17 @@ RowMenu(i) {
     ; a MISSED task's note is asked for by its buttons, about the day it missed
     if (Tasks[i].list != "M")
         Menu, Row, Add, % (TaskNote(Tasks[i], CurDay) != "" ? "Edit note" : "Add a note"), MenuNote
-    Menu, Row, Add, % (Tasks[i].list = "L" ? "Move to Today" : "Move to Long term"), MenuMove
+    ; Where it can go. Short term needs a day, so it opens the calendar first and
+    ; the task only moves once one is picked.
+    l := Tasks[i].list
+    if (l = "S")
+        Menu, Row, Add, Change the deadline..., MenuToShort
+    else
+        Menu, Row, Add, Move to Short term..., MenuToShort
+    if (l = "L" || l = "S")
+        Menu, Row, Add, Move to Today, MenuToToday
+    if (l != "L")
+        Menu, Row, Add, Move to Long term, MenuToLong
     Menu, Row, Add, Delete, MenuDelete
     Menu, Row, Show
 }
@@ -285,10 +321,18 @@ MenuNote:
     EditNote(MenuTask)
 Return
 
-MenuMove:
-    Tasks[MenuTask].list := (Tasks[MenuTask].list = "L") ? "T" : "L"
-    SaveState()
-    Refresh()
+MenuToToday:
+    TaskMoveTo(MenuTask, "T")
+Return
+
+MenuToLong:
+    TaskMoveTo(MenuTask, "L")
+Return
+
+; onto the short term list, or a new deadline for one already there - the same
+; calendar either way
+MenuToShort:
+    DuePick("move", "", Tasks[MenuTask].id)
 Return
 
 MenuDelete:
@@ -349,7 +393,11 @@ DotHint(i, day) {
     st := HabitDayState(h, day, today)
     what := (st = "done") ? "done" : (st = "rest") ? "rest day"
           : (st = "todo") ? "not done yet" : (st = "off") ? "not needed" : "missed"
-    act := HabitDid(h, day) ? "Click to take it back." : "Click to mark it done."
+    ; what the NEXT click does: done -> frozen -> not done (HabitCycleDay)
+    act := (st = "rest") ? "Click to take the freeze back."
+         : !HabitDid(h, day) ? "Click to mark it done."
+         : HabitRestLeft(h, day) ? "Click to freeze it instead."
+         : "Click to take it back."
     return when " " Chr(0x2014) " " what ". " act "`nRight-click for the calendar."
 }
 
@@ -395,6 +443,10 @@ HoverTip(card) {
         if (t.list = "M")
             tip .= (tip != "" ? "`n" : "") "missed " MissSinceText(t.since) "   "
                 .  Chr(0x2713) " did it   " Chr(0x2715) " drop   " Chr(0x2193) " to today"
+        ; a short term row says the day, whole - the tag in front only has room
+        ; for "3d"
+        if (t.list = "S")
+            tip .= (tip != "" ? "`n" : "") ((t.due != "") ? "due " DueText(t.due) : "no deadline")
         note := TaskNote(t, CurDay)
         if (note != "")
             tip .= (tip != "" ? "`n" : "") Chr(0x270E) " " WrapText(note, 60)

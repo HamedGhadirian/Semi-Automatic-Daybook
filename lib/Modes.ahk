@@ -27,6 +27,17 @@ ToggleOnTop() {
     ApplyOnTop()
 }
 
+; The windows that open beside the panel - journal, habit, note, quick add -
+; float when the panel floats, and are ordinary windows when it does not: the
+; journal used to stay over everything while the panel itself was not on top.
+; Set just before each one is shown, and by ApplyOnTop for the ones open.
+; Only ever called on a window already built - a Gui option on one that is not
+; would make an empty window.
+SideOnTop(gui) {
+    global PanelOnTop
+    Gui, % gui ":" (PanelOnTop ? "+" : "-") "AlwaysOnTop"
+}
+
 ; Gui +/-AlwaysOnTop rather than WinSet: this changes the GUI's own option, so
 ; it survives the Gui,Show that every Relayout() ends with. A WinSet would be
 ; quietly undone the next time you opened a section.
@@ -49,8 +60,11 @@ ToggleOnTop() {
 ; As an ordinary window (PanelTaskbar) it never has the flag: clicking a window
 ; and having it take the keyboard is what a window does, on top or not.
 ApplyOnTop() {
-    global PanelOnTop, PanelHwnd, PanelTaskbar
+    global PanelOnTop, PanelHwnd, PanelTaskbar, JrnHwnd, HabEdHwnd, CapHwnd, NoteHwnd, DueHwnd
     Gui, % "Panel:" (PanelOnTop ? "+" : "-") "AlwaysOnTop"
+    for gui, hwnd in {JrnEd: JrnHwnd, HabEd: HabEdHwnd, Cap: CapHwnd, Note: NoteHwnd, Due: DueHwnd}
+        if (hwnd && DllCall("IsWindowVisible", "ptr", hwnd))
+            SideOnTop(gui)
     WinSet, ExStyle, % ((PanelOnTop && !PanelTaskbar) ? "+" : "-") "0x08000000"
         , ahk_id %PanelHwnd%
     GuiControl, Panel:, ModeTxt, % ModeGlyph()

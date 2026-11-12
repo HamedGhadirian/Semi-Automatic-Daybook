@@ -89,6 +89,15 @@ Relayout() {
     if (OpenToday)
         used := PlaceRows("T", y, used)
 
+    ; ---- Short term - a deadline each, soonest first
+    PlaceHdr(y, 20, {"ShortHdr": "y" y
+               , "ShortCnt": "x" (HdrNumR - 102) " y" (y + 2) " w26"
+               , "ShortAdd": "x" (HdrNumR - 24) " y" (y - 2) " w24"})
+    GuiControl, Panel:, ShortHdr, % Caret(OpenShort) " SHORT TERM TASKS"
+    y += 22
+    if (OpenShort)
+        used := PlaceRows("S", y, used)
+
     ; ---- Long term
     PlaceHdr(y, 20, {"LongHdr": "y" y
                , "LongCnt": "x" (HdrNumR - 102) " y" (y + 2) " w26"
@@ -293,9 +302,17 @@ Caret(open) {
 PlaceRows(list, ByRef y, used) {
     global
     shown := 0
-    for i, t in Tasks {
-        if (t.list != list)
-            continue
+    ; The tasks of this list, as indexes into Tasks. Short term goes soonest
+    ; deadline first; the array itself is never re-sorted, because a pending
+    ; tick holds a task by its index (see PendMark).
+    rowOrder := []
+    for i, t in Tasks
+        if (t.list = list)
+            rowOrder.Push(i)
+    if (list = "S")
+        DueSort(rowOrder)
+    for _, i in rowOrder {
+        t := Tasks[i]
         if (++shown > MaxRows)
             break
         ; see the same skip in PlaceHabits
@@ -315,6 +332,9 @@ PlaceRows(list, ByRef y, used) {
         miss := (list = "M")
         ; how many days it has been left undone, in front where it is seen
         label := (t.carry > 0) ? Chr(0xD7) t.carry "  " t.text : t.text
+        ; a short term task wears the time it has left in front: "3d  call the bank"
+        if (list = "S" && t.due != "")
+            label := DueTag(t.due) "  " t.text
 
         ; Each colour goes into a variable first: "+c%" only forces an
         ; expression when the % is the FIRST thing in the parameter, and here
@@ -323,6 +343,9 @@ PlaceRows(list, ByRef y, used) {
         chkCol   := done ? CGreen : CMuted
         xCol     := fail ? CRed : CDim
         txtCol   := (done || fail) ? CDim : CText
+        ; due today or tomorrow: amber, the colour that means "this one needs you"
+        if (list = "S" && !done && !fail && t.due != "" && DueDays(t.due) <= 1)
+            txtCol := CAmber
 
         GuiControl, Panel:Move, RowChk%n%, % "x" (CardL + 6) " y" y
         GuiControl, Panel:+c%chkCol%, RowChk%n%
@@ -370,7 +393,7 @@ HideRow(n) {
 PlaceHabits(ByRef y) {
     global Habits, HabPool, HabitDays, HabDotD, HabDotGap, HabNumW
     global CardL, CardR, RowH, RowGap, Cards, Dots, HabRow, PanelHdrH, PanelFootLine
-    global CGreen, CMuted, CText, CDim
+    global CGreen, CMuted, CText, CDim, CBlue
     used := 0
     today := LogicalDay()
     ; Right to left: the streak sits against the card's right edge, the week of
@@ -405,13 +428,16 @@ PlaceHabits(ByRef y) {
         ; to get out of the way; a habit ticked today is a win, and the row
         ; should light up rather than fade. The tick, the last dot and the
         ; number carry the green.
-        chkCol := did ? CGreen : CMuted
+        ; Frozen today: a blue snowflake where the box was, the same blue as its
+        ; dot, so a freeze is visible on the row and not only in the dots.
+        frozen := (!did && HabitRested(hb, today))
+        chkCol := did ? CGreen : frozen ? CBlue : CMuted
         txtCol := CText
         numCol := HabitStreakColour(hb)
 
         GuiControl, Panel:Move, HabChk%r%, % "x" (CardL + 6) " y" y
         GuiControl, Panel:+c%chkCol%, HabChk%r%
-        GuiControl, Panel:, HabChk%r%, % did ? Chr(0x2713) : Chr(0x2610)
+        GuiControl, Panel:, HabChk%r%, % did ? Chr(0x2713) : frozen ? Chr(0x2744) : Chr(0x2610)
         GuiControl, Panel:Show, HabChk%r%
 
         GuiControl, Panel:Move, HabTxt%r%, % "x" nameX " y" y " w" nameW
@@ -452,7 +478,7 @@ HideHab(n) {
 ; Recount, recolour the +, then lay out.
 Refresh() {
     global
-    nOpen := 0, nToday := 0, nLong := 0, nMiss := 0
+    nOpen := 0, nToday := 0, nLong := 0, nMiss := 0, nShort := 0
     for _, t in Tasks {
         if (t.list = "T") {
             nToday++
@@ -460,11 +486,14 @@ Refresh() {
                 nOpen++
         } else if (t.list = "M")
             nMiss++
+        else if (t.list = "S")
+            nShort++
         else
             nLong++
     }
     GuiControl, Panel:, MissCnt, %nMiss%
     GuiControl, Panel:, TodayCnt, %nOpen%
+    GuiControl, Panel:, ShortCnt, %nShort%
     GuiControl, Panel:, LongCnt, %nLong%
     ; Habits count DOWN to nothing left, which is the opposite of the task
     ; lists and is the point: "3/5" is a thing you finish, and it goes green

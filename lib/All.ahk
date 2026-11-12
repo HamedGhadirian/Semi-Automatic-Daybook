@@ -30,6 +30,8 @@
 ;   Capture    the box you type a new task into
 ;   Note       the box that opens beside a task you just marked
 ;   Missed     what a day ended without: did it, drop it, or back to today
+;   CalGrid    the month calendar the habit window and Due both draw
+;   Due        the calendar that asks a short term task for its deadline
 ;   SettingsWin  the settings window
 ;   HabitWin   one habit's window: how often, its calendar, its streak
 ;   JournalWin the journal window - your part of a day note
@@ -65,6 +67,8 @@
 #Include %A_LineFile%\..\Capture.ahk
 #Include %A_LineFile%\..\Note.ahk
 #Include %A_LineFile%\..\Missed.ahk
+#Include %A_LineFile%\..\CalGrid.ahk
+#Include %A_LineFile%\..\Due.ahk
 #Include %A_LineFile%\..\SettingsWin.ahk
 #Include %A_LineFile%\..\HabitWin.ahk
 #Include %A_LineFile%\..\JournalWin.ahk

@@ -387,6 +387,8 @@ DayTaskLine(r) {
     s := "- " mark " " r.text
     if (r.list = "L")
         s .= "  " Chr(0x00B7) " long term"
+    else if (r.list = "S")
+        s .= "  " Chr(0x00B7) " short term"
     if (r.status = "open" && r.carry > 0)     ; days it had already been left undone
         s .= "  " Chr(0x00B7) " carried " Chr(0xD7) r.carry
     if (r.note != "")
@@ -395,15 +397,16 @@ DayTaskLine(r) {
 }
 
 ; What was on that day's list, as {text, status, list, carry, note}. Today is
-; read from the live list: everything on Today, and a long term task only if it
-; was finished today. An earlier day is read from what CloseDay() kept of it.
+; read from the live list: everything on Today, a short term task on its
+; deadline day, and a long term task only if it was finished today. An earlier day is read from what CloseDay() kept of it.
 DayTasks(day) {
     global Tasks, Past, CurDay
     out := []
     if (day = CurDay) {
-        for _, want in ["T", "L"]
+        for _, want in ["T", "S", "L"]
             for _, t in Tasks
-                if (t.list = want && (want = "T" || t.doneOn = day))
+                if (t.list = want && (want = "T" || t.doneOn = day
+                    || (want = "S" && t.due = day)))
                     out.Push({text: t.text, status: t.status, list: t.list
                             , carry: t.carry, note: TaskNote(t, day)})
     } else {

@@ -38,6 +38,7 @@ HabEdShow(i) {
         x := px + pw + 8
     y := py
     ClampWin(x, y, ww, wh)
+    SideOnTop("HabEd")
     Gui, HabEd:Show, x%x% y%y%, Daybook habit
 }
 
@@ -99,37 +100,13 @@ HabEdBuild() {
 
     ; ---- the days
     HabEdHead(L, 170, W, "DAYS")
-    Gui, HabEd:Font, s10 Norm c%CText%, Segoe UI
-    opt := "vHabEdPrev gHabEdPrev x" L " y192 w30 h24 +0x200 BackgroundTrans"
-    Gui, HabEd:Add, Text, %opt%, % Chr(0x25C0)
-    opt := "vHabEdMonthTxt x" (L + 34) " y192 w" (7 * (cw + gap) - 72) " h24 Center +0x200 BackgroundTrans"
-    Gui, HabEd:Add, Text, %opt%
-    opt := "vHabEdNext gHabEdNext x" (L + 7 * (cw + gap) - gap - 30) " y192 w30 h24 Right +0x200 BackgroundTrans"
-    Gui, HabEd:Add, Text, %opt%, % Chr(0x25B6)
+    ; the month itself is the shared grid (CalGrid.ahk); the week column
+    ; beside it is this window's own
+    CalGridBuild("HabEd", "HabEd", L, 192, cw, ch, gap, "HabEdDay", "HabEdPrev", "HabEdNext")
     Gui, HabEd:Font, s8 Norm c%CDim%, Segoe UI
-    for k, name in ["M", "T", "W", "T", "F", "S", "S"] {
-        opt := "x" (L + (k - 1) * (cw + gap)) " y222 w" cw " h16 Center BackgroundTrans"
-        Gui, HabEd:Add, Text, %opt%, %name%
-    }
     wx := L + 7 * (cw + gap) + 4
     opt := "vHabEdWkHead x" wx " y222 w" (W - wx - L) " h16 Center BackgroundTrans"
     Gui, HabEd:Add, Text, %opt%, week
-    Gui, HabEd:Font, s9 Norm c%CText%, Segoe UI
-    ; Each day is two controls: a coloured square, and the number on top of
-    ; it. A Text control in v1 cannot be given a background colour of its own
-    ; (only BackgroundTrans) - the first version tried, and every done day came
-    ; out as dark text on the dark window, invisible. A Progress bar CAN, which
-    ; is what the panel's top bar already is. The square is Disabled so that
-    ; Windows looks straight past it for the click, to the number.
-    Loop 42 {
-        k := A_Index, r := (k - 1) // 7
-        opt := "vHabEdSq" k " x" (L + Mod(k - 1, 7) * (cw + gap)) " y" (240 + r * (ch + gap))
-             . " w" cw " h" ch " Disabled -E0x200 -Theme Background" CCard " c" CCard
-        Gui, HabEd:Add, Progress, %opt%, 0
-        opt := "vHabEdCell" k " gHabEdDay x" (L + Mod(k - 1, 7) * (cw + gap))
-             . " y" (240 + r * (ch + gap)) " w" cw " h" ch " Center +0x200 BackgroundTrans"
-        Gui, HabEd:Add, Text, %opt%
-    }
     Gui, HabEd:Font, s8 Norm c%CText%, Segoe UI
     Loop 6 {
         opt := "vHabEdWk" A_Index " x" wx " y" (240 + (A_Index - 1) * (ch + gap))
@@ -299,16 +276,9 @@ HabEdPaint() {
         return
     h := Habits[i]
     today := LogicalDay()
-    first := HabEdMonth "-01"
-    start := DayShift(first, -Mod(DayNum(first) - 2, 7))    ; the Monday on or before it
-    FormatTime, title, % StrReplace(HabEdMonth, "-") "01", MMMM yyyy
-    GuiControl, HabEd:, HabEdMonthTxt, %title%
-    col := (HabEdMonth > SubStr(h.born, 1, 7)) ? CText : CDim
-    GuiControl, HabEd:+c%col%, HabEdPrev
-    GuiControl, HabEd:MoveDraw, HabEdPrev
-    col := (HabEdMonth < SubStr(today, 1, 7)) ? CText : CDim
-    GuiControl, HabEd:+c%col%, HabEdNext
-    GuiControl, HabEd:MoveDraw, HabEdNext
+    start := CalGridStart(HabEdMonth)               ; the Monday on or before the 1st
+    CalGridTitle("HabEd", "HabEd", HabEdMonth
+        , HabEdMonth > SubStr(h.born, 1, 7), HabEdMonth < SubStr(today, 1, 7))
     Loop 42 {
         day := DayShift(start, A_Index - 1)
         mine := (SubStr(day, 1, 7) = HabEdMonth)
@@ -332,10 +302,7 @@ HabEdPaint() {
             if (day = today && (st = "todo"))
                 fg := CAmber
         }
-        GuiControl, HabEd:+Background%bg%, HabEdSq%A_Index%
-        GuiControl, HabEd:+c%fg%, HabEdCell%A_Index%
-        GuiControl, HabEd:, HabEdCell%A_Index%, %txt%
-        GuiControl, HabEd:MoveDraw, HabEdCell%A_Index%   ; on top of the new colour
+        CalGridCell("HabEd", "HabEd", A_Index, bg, fg, txt)
     }
     ; A week-counted habit: how each week of this month went.
     GuiControl, % "HabEd:" (h.kind = "W" ? "Show" : "Hide"), HabEdWkHead
@@ -427,11 +394,8 @@ HabEdMove(dir) {
     i := HabEdIndex()
     if (!i)
         return
-    t := StrReplace(HabEdMonth, "-") "15"
-    step := dir * 30
-    t += step, Days
-    FormatTime, m, %t%, yyyy-MM
-    if (m < SubStr(Habits[i].born, 1, 7) || m > SubStr(LogicalDay(), 1, 7))
+    m := CalMonthShift(HabEdMonth, dir)
+    if (m <SubStr(Habits[i].born, 1, 7) || m > SubStr(LogicalDay(), 1, 7))
         return
     HabEdMonth := m
     HabEdSay("")

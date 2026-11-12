@@ -5,21 +5,31 @@ Notable changes, newest first. The version is in `lib\Config.ahk`
 
 ## 1.1.0
 
-- **A journal window** - JOURNAL on the panel (or the tray) opens your part of the day's note; any day, saved as you type.
-- **One copy only** - the window reads and writes the note itself, so what you write in Obsidian is what it shows.
+- **A journal window** - JOURNAL on the panel (or the tray) opens your part of the day's note; any day, saved as you type. It reads and writes the note itself, so what you write in Obsidian is what it shows.
 - **Titles for days** - a title box in the journal window names the file (`2026-10-14 world cup.md`); Daybook finds a day by its date, so a renamed note is never lost.
-- **Tasks start open** - Shift+Enter "already did it" is gone; what happened goes in the journal.
 - **Weeks and months** - a note for each week, month and year, from the day notes; a month that is over is packed into its own folder. Off until you turn it on.
+- **Short term tasks** - a list with a deadline: the + opens a small calendar, the habit window's own, where one click sets the day. The days left show in front of the name; a deadline that goes by sends the task to MISSED.
+- **Freeze from the dots** - a click goes done (green), frozen (blue), not done, on any day the dots show; blue is skipped once the month's freezes are used. A frozen day now counts as the day the habit was due.
 
 <details>
 <summary>Everything that changed</summary>
 
+- Tasks always start open: Shift+Enter "already did it" is gone, what happened goes in the journal.
 - New notes open with `## journal`; older ones with `## my notes` are still read.
 - Enter carries a `- ` / `1. ` / `- [ ] ` list on; Enter on an empty item ends it.
 - Changed in two places at once, the window asks which one stays and keeps the other in `backups\journal-conflicts`.
 - Today's word count beside the JOURNAL heading.
 - A day's note is found in the journal folder or its month folders (`2026\2026-10 October\`). Two notes for one day: an empty one Daybook made is folded into yours (kept in `backups\notes\folded`); two with words are both left alone and the window says so.
 - With the journal off, JOURNAL leaves the panel and its tray items are greyed out.
+- Persian in the journal reads right to left, English words inside it too; each box goes by its first letter.
+- The journal, habit, note and quick-add windows are on top only when the panel is.
+- Every other day, frozen on the day it was due: the next day is a day off, not a miss. Before, the day after a freeze turned red and the streak broke.
+- Today's dot on a habit is brighter, so it no longer vanishes into the row under the pointer.
+- A task moved to Long term (or Today) starts again at zero: the x7 of a missed task no longer follows it.
+- A frozen habit shows a blue snowflake in place of its tick box.
+- A short term task can have no deadline: it waits after the dated ones and never goes to MISSED by itself. "no deadline" on the calendar, for a new task or one already there.
+- The deadline calendar: Monday first, "tomorrow" and "in a week" above it, days gone by dimmed, a deadline already set in blue. Esc goes back to the box with your words still in it.
+- The habit window and the deadline picker draw one shared calendar (`lib\CalGrid.ahk`).
 
 </details>
 

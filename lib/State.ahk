@@ -1,7 +1,9 @@
 ﻿;================================================================================
 ; State (persisted)
 ;================================================================================
-global Tasks        := []        ; {list:"T"/"L"/"M", text, status, carry, born, due, asked, since}
+; list: "T" today, "S" short term (due is its deadline, a day), "L" long term,
+; "M" missed (since is the day it was meant for)
+global Tasks        := []        ; {list:"T"/"S"/"L"/"M", text, status, carry, born, due, asked, since}
 global Habits       := []        ; {text, born, streak, best, total, done:[days]}
 global CurDay       := ""
 global SitSec       := 0
@@ -26,6 +28,7 @@ global StateFile    := A_ScriptDir "\Daybook-state.txt"
 global PanelHwnd, CapHwnd, NoteHwnd
 global OpenMissed   := 1         ; the MISSED section - list code "M", see Missed.ahk
 global OpenToday    := 1
+global OpenShort    := 1         ; the SHORT TERM TASKS section - list code "S"
 global OpenLong     := 0         ; the LONG TERM TASKS section - list code "L"
 global OpenStats    := 0
 global OpenHabits   := 1
@@ -71,6 +74,8 @@ global MissMenuId   := 0         ; the task the "did it on..." menu is for
 global MissMenuDays := {}        ; that menu's item -> day
 global MenuTask     := 0
 global MenuHabit    := 0
+global DueHwnd := 0, DueBuilt := 0, DueMode := "", DueWords := "", DueId := 0   ; the deadline picker - Due.ahk
+global DueW := 0, DueH := 0, DueMonth := "", DueCells := [], DueWas := ""
 global CapList      := "T"       ; which list the capture box was opened for
 global CapMode      := "add"     ; "add" or "rename" - what Enter will do
 global CapTask      := 0         ; the task or habit being renamed

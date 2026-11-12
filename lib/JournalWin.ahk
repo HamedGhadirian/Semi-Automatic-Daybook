@@ -45,6 +45,7 @@ JrnShow(day := "") {
         x := px + pw + 8
     y := py
     ClampWin(x, y, JrnW, JrnH)
+    SideOnTop("JrnEd")
     Gui, JrnEd:Show, x%x% y%y%, Daybook journal
     GuiControl, JrnEd:Focus, JrnEdit
     GuiControlGet, hEd, JrnEd:Hwnd, JrnEdit
@@ -242,6 +243,7 @@ JrnLoad(day) {
     JrnAskShow(false)
     GuiControl, JrnEd:, JrnEdit, % r.body
     GuiControl, JrnEd:, JrnName, %JrnNameBase%
+    JrnFitDir()
     JrnPaintDay()
     if (!r.ok)
         JrnSay("could not read the note", true)
@@ -448,12 +450,46 @@ JrnTakeFile() {
 
 ; Typing: saved once it stops for a moment, not on every key.
 JrnTyped:
+    JrnFitDir()
     SetTimer, JrnAutoSave, -1500
 Return
 
 JrnNamed:
+    JrnFitDir()
     SetTimer, JrnNameSave, -1500
 Return
+
+; Persian reads right to left. Each box - the title and the writing - takes
+; the direction of its first letter: Persian (or any right-to-left script),
+; and the box turns right-aligned and right-to-left, so the English words in a
+; Persian sentence land where they belong; English, and it stays as it was.
+; Looked at again only when that first letter changes language, so Windows' own
+; switch (Ctrl + Right Shift / Ctrl + Left Shift) still holds in between.
+JrnFitDir() {
+    static was := {}
+    for i, name in ["JrnEdit", "JrnName"] {
+        GuiControlGet, t, JrnEd:, %name%
+        rtl := JrnRtl(t)
+        if (was.HasKey(name) && was[name] = rtl)
+            continue
+        was[name] := rtl
+        GuiControlGet, h, JrnEd:Hwnd, %name%
+        st := DllCall("GetWindowLongPtr", "ptr", h, "int", -16, "ptr")
+        ex := DllCall("GetWindowLongPtr", "ptr", h, "int", -20, "ptr")
+        DllCall("SetWindowLongPtr", "ptr", h, "int", -16, "ptr", rtl ? st | 0x2 : st & ~0x2)            ; ES_RIGHT
+        DllCall("SetWindowLongPtr", "ptr", h, "int", -20, "ptr", rtl ? ex | 0x3000 : ex & ~0x3000)      ; WS_EX_RTLREADING | WS_EX_RIGHT
+        DllCall("SetWindowPos", "ptr", h, "ptr", 0, "int", 0, "int", 0, "int", 0, "int", 0, "uint", 0x37)  ; FRAMECHANGED
+        DllCall("InvalidateRect", "ptr", h, "ptr", 0, "int", 1)
+    }
+}
+
+; Is the first letter of t from a right-to-left script - Persian, Arabic, Hebrew?
+JrnRtl(ByRef t) {
+    if (!RegExMatch(t, "(*UCP)\pL", m))
+        return false
+    c := Ord(m)
+    return (c >= 0x0590 && c <= 0x08FF) || (c >= 0xFB1D && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF)
+}
 
 JrnNameSave:
     if (JrnSaveName() != "busy" && JrnClosing)
@@ -487,6 +523,7 @@ JrnLook() {
         && !(JournalTitleOf(r.f) == JrnNameBase)) {
         JrnNameBase := JournalTitleOf(r.f)
         GuiControl, JrnEd:, JrnName, %JrnNameBase%
+        JrnFitDir()
     }
     if (r.body == JrnBase)
         return
@@ -494,6 +531,7 @@ JrnLook() {
     GuiControlGet, hEd, JrnEd:Hwnd, JrnEdit
     DllCall("SendMessage", "ptr", hEd, "uint", 0xB0, "uint*", a, "uint*", b)   ; EM_GETSEL
     GuiControl, JrnEd:, JrnEdit, % r.body
+    JrnFitDir()
     DllCall("SendMessage", "ptr", hEd, "uint", 0xB1, "ptr", a, "ptr", a)       ; caret back
     JrnSay("updated from the note")
 }

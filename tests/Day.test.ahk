@@ -19,7 +19,7 @@ global CurDay := "", NextTaskId := 1
 global AppSec := {}, HourSec := {}, LogApps := 1, SampleMs := 30000, StatsTop := 8
 global SitSec := 0, AwaySec := 0, CutShort := 0
 global PendMarkKind := "", PendMarkTask := 0
-global CGreen := "0", CAmber := "0", CRed := "0", CTrack := "0", CDim := "0"
+global CGreen := "0", CAmber := "0", CRed := "0", CTrack := "0", CDim := "0", CToday := "0"
 global Fails := 0, Log := ""
 global StateFile := A_ScriptDir "\journal\day-state.txt"   ; backups\notes goes beside it
 
@@ -57,6 +57,8 @@ ClampWin(ByRef x, ByRef y, w, h) {
 }
 TaskbarId(hwnd, id) {
 }
+SideOnTop(gui) {
+}
 SetupDark(hwnd) {
 }
 ShapeWindow(hwnd, round) {
@@ -69,6 +71,7 @@ ShapeWindow(hwnd, round) {
 #Include %A_ScriptDir%\..\lib\Habits.ahk
 #Include %A_ScriptDir%\..\lib\Log.ahk
 #Include %A_ScriptDir%\..\lib\Rollup.ahk
+#Include %A_ScriptDir%\..\lib\CalGrid.ahk
 
 Ok(name, got, want) {
     global Fails, Log
@@ -278,6 +281,90 @@ i := TaskIndex(pid)
 Ok("two days gone: missed, x2",      Tasks[i].list " " Tasks[i].carry, "M 2")
 Ok("  since the day it was on",      Tasks[i].since, d2)
 
+; ---- short term: a deadline, and a miss only once it has gone ----------------
+AddTask("book the dentist", "S", "open", DayShift(today, 3))
+sa := Tasks[Tasks.Length()].id
+AddTask("renew the card", "S", "open", d2)
+sb := Tasks[Tasks.Length()].id
+AddTask("send the form", "S", "open", DayShift(today, 1))
+sc := Tasks[Tasks.Length()].id
+; no deadline: an empty day would sort FIRST as plain text - it has to go last
+AddTask("tidy the desk", "S", "open", "")
+sn := Tasks[Tasks.Length()].id
+Ok("short: it keeps its deadline",   Tasks[TaskIndex(sa)].due, DayShift(today, 3))
+Ok("short: a task of another list has none", Tasks[TaskIndex(pid)].due, "")
+Ok("short: tag, days left",           DueTag(DayShift(today, 3)), "3d")
+Ok("short: tag, today",               DueTag(today), "today")
+Ok("short: tag, far off",             DueTag(DayShift(today, 200)), "7mo")
+Ok("short: in words, tomorrow",       DueText(DayShift(today, 1)), "tomorrow")
+order := []
+for i, t in Tasks
+    if (t.list = "S")
+        order.Push(i)
+DueSort(order)
+Ok("short: soonest deadline first",   Tasks[order[1]].id " " Tasks[order[2]].id " " Tasks[order[3]].id, sb " " sc " " sa)
+Ok("short: no deadline goes last",    Tasks[order[4]].id, sn)
+b := BoardRender()
+Has("short: on the board",            b, "## short term`n`n")
+Has("short: the board says when",     b, "book the dentist  " dot " due " DayShift(today, 3))
+Has("short: no deadline, no due",     b, "tidy the desk`n")
+CurDay := yday                       ; a day closes: nothing here is due yet
+RollIfNeeded()
+Ok("short: before its day it stays",  Tasks[TaskIndex(sa)].list, "S")
+Ok("short: no deadline, it just waits", Tasks[TaskIndex(sn)].list " [" Tasks[TaskIndex(sn)].due "] x" Tasks[TaskIndex(sn)].carry, "S [] x0")
+Ok("short: a deadline gone is missed", Tasks[TaskIndex(sb)].list " " Tasks[TaskIndex(sb)].since, "M " d2)
+Ok("short: count = days since",       Tasks[TaskIndex(sb)].carry, 2)
+Ok("short: the deadline is cleared",  Tasks[TaskIndex(sb)].due, "")
+; a deadline of yesterday, closing today's list: due yesterday = missed at once
+sd := TaskIndex(sc)
+Tasks[sd].due := yday
+CurDay := yday
+RollIfNeeded()
+Ok("short: due yesterday, missed since then", Tasks[TaskIndex(sc)].list " " Tasks[TaskIndex(sc)].since, "M " yday)
+; moving a missed task to the long term clears its count
+TaskMoveTo(TaskIndex(sb), "L")
+Ok("move: to long term, list",        Tasks[TaskIndex(sb)].list, "L")
+Ok("move: the x2 is gone",            Tasks[TaskIndex(sb)].carry, 0)
+Ok("move: and the day it missed",     Tasks[TaskIndex(sb)].since, "")
+TaskSetDue(sb, DayShift(today, 5))
+Ok("deadline set on a long term task", Tasks[TaskIndex(sb)].list " " Tasks[TaskIndex(sb)].due, "S " DayShift(today, 5))
+TaskMoveTo(TaskIndex(sb), "T")
+Ok("move: to today drops the deadline", Tasks[TaskIndex(sb)].list " [" Tasks[TaskIndex(sb)].due "]", "T []")
+TaskSetDue(sb, "")
+Ok("short term with no deadline",     Tasks[TaskIndex(sb)].list " [" Tasks[TaskIndex(sb)].due "]", "S []")
+TaskSetDue(sn, DayShift(today, 2))
+Ok("a deadline given later",          Tasks[TaskIndex(sn)].due, DayShift(today, 2))
+TaskSetDue(sn, "")
+Ok("and taken away again",            Tasks[TaskIndex(sn)].list " [" Tasks[TaskIndex(sn)].due "]", "S []")
+
+; ---- the calendar's dates, years ahead (CalGrid.ahk) --------------------------
+; The deadline calendar must still be right in five or ten years: months
+; across the turn of a year, leap years, and the Monday each month starts on.
+Ok("month: on a year",              CalMonthShift("2026-12", 1), "2027-01")
+Ok("month: back a year",            CalMonthShift("2027-01", -1), "2026-12")
+Ok("month: ten years on",           CalMonthShift("2026-11", 120), "2036-11")
+Ok("month: and back again",         CalMonthShift("2036-11", -120), "2026-11")
+Ok("month: 1999 to 2000",           CalMonthShift("1999-12", 1), "2000-01")
+; every month from now to 25 years on: the first square is a Monday, on or
+; before the 1st, less than a week before it - and each month is reached by
+; stepping one at a time, as the arrow does
+bad := "", m := SubStr(today, 1, 7)
+Loop 300 {
+    st := CalGridStart(m)
+    FormatTime, wd, % StrReplace(st, "-") "000000", WDay      ; 2 is Monday
+    gapDays := DayNum(m "-01") - DayNum(st)
+    if (wd != 2 || gapDays < 0 || gapDays > 6)
+        bad .= m " "
+    m := CalMonthShift(m, 1)
+}
+Ok("calendar: 300 months start on a Monday", bad, "")
+Ok("calendar: before 2000 too",     CalGridStart("1999-12"), "1999-11-29")
+Ok("calendar: a leap February",     DayShift("2028-02-28", 1), "2028-02-29")
+; the tag in front of the task, near and far
+Ok("tag: tomorrow",                 DueTag(DayShift(today, 1)), "1d")
+Ok("tag: months",                   DueTag(DayShift(today, 150)), "5mo")
+Ok("tag: years",                    DueTag(DayShift(today, 3650)), "10y")
+
 ; ---- old days are let go -----------------------------------------------------
 Past.Push({day: DayShift(today, -60), id: 99, list: "T", status: "done", carry: 0, note: "", text: "long ago"})
 PastTime[DayShift(today, -60)] := "x"
@@ -484,6 +571,14 @@ Ok("window: then it goes through", JrnSaveName(), "saved")
 JrnGo(w1)
 Ok("window: and on to the next day", JrnDay, w1)
 Gui, JrnEd:Hide
+; which way a box reads: by its first letter (Persian built from its codes:
+; this file stays plain ASCII)
+fa := Chr(0x633) Chr(0x644) Chr(0x627) Chr(0x645)          ; salaam
+Ok("direction: Persian reads right to left",  JrnRtl(fa) ? 1 : 0, 1)
+Ok("direction: English left to right",         JrnRtl("hello there") ? 1 : 0, 0)
+Ok("direction: a list, Persian with English",   JrnRtl("- " fa " Daybook") ? 1 : 0, 1)
+Ok("direction: digits and marks do not count",  JrnRtl("12) - hello " fa) ? 1 : 0, 0)
+Ok("direction: empty is left to right",         JrnRtl("") ? 1 : 0, 0)
 
 FileDelete, %A_ScriptDir%\results-Day.txt
 FileAppend, % (Fails ? Fails " FAILED`n" : "all passed`n") Log

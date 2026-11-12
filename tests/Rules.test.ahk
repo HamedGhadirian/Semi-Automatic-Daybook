@@ -11,7 +11,7 @@ SetBatchLines -1
 
 global DayStartHour := 3, HabitDays := 7, RestPerMonth := 2, JournalOn := 0
 global Habits := []
-global CGreen := "G", CAmber := "A", CRed := "R", CTrack := "T", CDim := "D", CBlue := "B"
+global CGreen := "G", CAmber := "A", CRed := "R", CTrack := "T", CDim := "D", CBlue := "B", CToday := "Y"
 global Fails := 0, Log := ""
 global FakeToday := ""
 
@@ -95,6 +95,35 @@ HabitCompute(e)
 Ok("three days on: broken",        e.streak, 0)
 Ok("best remembers",               e.best, 4)
 Ok("the second day undone is red", HabitDayState(e, "2026-09-09", FakeToday), "miss")
+
+; ---- every other day, frozen on the day it was due ------------------------------
+; done 1st and 3rd, due the 5th and frozen then. The 6th is a day off, NOT a
+; miss: the next due day is the 7th, two days after the freeze.
+FakeToday := "2026-09-06"
+f := Make("non-fiction", "D", 2, "2026-09-01", "01,03", "05")
+Ok("frozen: the chain holds on the day after", f.streak, 2)
+Ok("frozen: the freeze does not count",        f.total, 2)
+Ok("frozen: the day after is not due",         HabitDue(f) ? 1 : 0, 0)
+Ok("frozen: the number is green",              HabitStreakColour(f), CGreen)
+FakeToday := "2026-09-07"
+HabitCompute(f)
+Ok("frozen: the 6th is grey, not red",         HabitDayState(f, "2026-09-06", FakeToday), "off")
+Ok("frozen: the 7th is due",                   HabitDue(f) ? 1 : 0, 1)
+Ok("frozen: still alive on the 7th",           f.streak, 2)
+FakeToday := "2026-09-08"
+HabitCompute(f)
+Ok("frozen: the 7th undone is the miss",       HabitDayState(f, "2026-09-07", FakeToday), "miss")
+Ok("frozen: broken on the 8th",                f.streak, 0)
+FakeToday := "2026-09-07"
+HabitInsertDay(f.done, "2026-09-07")
+HabitCompute(f)
+Ok("frozen: done on the 7th, 3 days done",     f.streak, 3)
+; and the old trap stays shut: a rest day does not let two empty days through
+FakeToday := "2026-09-08"
+g := Make("walk", "D", 2, "2026-09-01", "01", "03")
+HabitCompute(g)
+Ok("frozen: 1st done, 3rd frozen, 5th is due", HabitBrokenBy(g, "2026-09-05") ? 1 : 0, 1)
+Ok("frozen: and the 4th is a day off",         HabitBrokenBy(g, "2026-09-04") ? 1 : 0, 0)
 
 ; ---- every 3 days -----------------------------------------------------------------
 FakeToday := "2026-09-11"

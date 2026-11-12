@@ -301,8 +301,8 @@ RollDay(day) {
                 note := Trim(SubStr(text, p + 4))
                 text := SubStr(text, 1, p - 1)
             }
-            text := RegExReplace(text, "  " Chr(0x00B7) " (long term|carried .*)$")
-            text := RegExReplace(text, "  " Chr(0x00B7) " (long term|carried .*)$")
+            text := RegExReplace(text, "  " Chr(0x00B7) " (long term|short term|carried .*)$")
+            text := RegExReplace(text, "  " Chr(0x00B7) " (long term|short term|carried .*)$")
             st := (m1 = tick) ? "done" : (m1 = cross) ? "failed" : "open"
             r.tasks.Push({text: Trim(text), status: st, note: note, day: day})
         } else if (sect = "time at the machine") {

@@ -22,13 +22,21 @@
 ;                       There is no note box: a habit is a yes or a no
 ;   a habit's DOTS      each one is a day, and each one is a button. Click
 ;                       Tuesday's dot and Tuesday is ticked - for the evening
-;                       you did the thing and forgot to say so
+;                       you did the thing and forgot to say so. Each click
+;                       goes one step: done (green) -> frozen (blue) -> not
+;                       done. Blue is skipped once the month's freezes are
+;                       used. A freeze counts as the day the habit was due; it
+;                       holds the streak and does not add to it
 ;   right-click a row   move between lists / delete, or rename a habit
 ;   +                   add a task to that list; amber means something is owed.
 ;                       The box that opens from TODAY'S TASKS:
 ;                         Enter        add to Today
 ;                         Ctrl+Enter   add to Long term
 ;                         Esc          cancel
+;                       From SHORT TERM TASKS the + asks for the deadline next,
+;                       on a small calendar: click a day (or "tomorrow", "in a
+;                       week", "no deadline") and it is set. Esc goes back to the box with
+;                       your words still in it.
 ;                       A task always starts open. What already happened goes
 ;                       in the journal, not on the list.
 ;   JOURNAL             opens the journal window: your part of the day's note,

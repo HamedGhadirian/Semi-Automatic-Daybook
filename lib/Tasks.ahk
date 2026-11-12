@@ -5,14 +5,14 @@
 ; it is what lets Daybook.md say "this line is that task" after the words on
 ; it have changed - see Sync.ahk. Never reused, so a line left over from a task
 ; deleted long ago can never be mistaken for a new one.
-AddTask(text, list := "T", status := "open") {
+AddTask(text, list := "T", status := "open", due := "") {
     global NextTaskId
     text := Trim(RegExReplace(text, "[\r\n\t]+", " "))
     if (text = "")
         return
     CommitMark()                     ; anything pending belongs to another task
     Tasks.Push({list: list, text: text, status: status, carry: 0
-              , born: LogicalDay(), due: "", asked: 0, id: NextTaskId++
+              , born: LogicalDay(), due: (list = "S") ? due : "", asked: 0, id: NextTaskId++
               , notes: {}, doneOn: (status = "open") ? "" : CurDay})
     SaveState()
     Refresh()
@@ -41,6 +41,41 @@ RenameTask(i, newText) {
     if (PendMarkKind = "T" && PendMarkTask = i)
         return
     Journal("~ renamed: " old "   " Chr(0x2192) "   " newText)
+}
+
+; Move a task to Today or Long term. It starts that list clean: the xN in front
+; of a MISSED task is days left undone ON THE LIST IT FAILED ON, and a task
+; parked for the long term has not failed at anything - so it moves with its
+; count and its deadline cleared. (Moving it back to Today and missing it again
+; starts the count over, which is the honest reading of it.)
+TaskMoveTo(i, list) {
+    t := Tasks[i]
+    if (!t || t.list = list)
+        return
+    CommitMark()                     ; indexes are about to be read again
+    t.list := list, t.carry := 0, t.since := "", t.due := ""
+    SaveState()
+    Refresh()
+    Journal(Chr(0x2192) " moved to " (list = "L" ? "long term" : "today") ": " t.text)
+}
+
+; A task onto the short term list, or a new deadline for one already there. due
+; is a day, yyyy-MM-dd - or "" for no deadline at all: the task waits on the
+; list and never goes to MISSED by itself.
+TaskSetDue(id, due) {
+    i := TaskIndex(id)
+    if (!i)
+        return
+    t := Tasks[i]
+    if (t.list = "S" && t.due = due)     ; nothing changes: no journal line
+        return
+    CommitMark()
+    was := (t.list = "S") ? t.due : ""
+    t.list := "S", t.due := due, t.carry := 0, t.since := ""
+    SaveState()
+    Refresh()
+    Journal(Chr(0x2192) " short term, " ((due != "") ? "due " due : "no deadline")
+        . ((was != "") ? " (was " was ")" : "") ": " t.text)
 }
 
 ; doneOn is the day it was ticked or crossed, which is what puts a LONG TERM

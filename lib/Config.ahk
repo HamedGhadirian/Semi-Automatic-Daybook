@@ -206,6 +206,10 @@ global CBg      := "181B24"
 global CCard    := "202430"
 global CCardHi  := "2A3040"      ; row under the pointer
 global CTrack   := "2A2F40"      ; unfilled part of the top bar
+; Today's dot on a habit that is not done yet. It used to be CTrack, which is
+; almost exactly the colour of a row under the pointer (CCardHi), so the dot
+; vanished the moment you hovered the row. This one shows on both.
+global CToday   := "6A7390"
 global CText    := "EBEEF5"
 global CMuted   := "8C94AA"
 global CDim     := "5F677D"

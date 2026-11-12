@@ -18,7 +18,7 @@ global HabitBoardOn := 0
 global JournalDir := ""
 global Habits := []
 global CGreen := "00E676", CAmber := "FFB300", CRed := "FF4D6D"
-global CTrack := "2A2F40", CDim := "5F677D", CBlue := "3D9BE9"
+global CTrack := "2A2F40", CDim := "5F677D", CBlue := "3D9BE9", CToday := "6A7390"
 global Fails := 0, Log := ""
 global FakeToday := ""
 global Journalled := []
@@ -149,7 +149,7 @@ Ok("dot a done day",   HabitDayState(h, "2026-09-12", "2026-09-28"), "done")
 Ok("dot before born",  HabitDayState(h, "2026-09-01", "2026-09-28"), "none")
 Ok("colour done",  HabitDotColour("done"), CGreen)
 Ok("colour miss",  HabitDotColour("miss"), CRed)
-Ok("colour todo",  HabitDotColour("todo"), CTrack)
+Ok("colour todo",  HabitDotColour("todo"), CToday)
 
 ; ---- the streak colour ------------------------------------------------------
 Ok("streak colour at zero", HabitStreakColour(h), CDim)
@@ -231,6 +231,40 @@ Ok("out of sight but kept", f.total, 3)      ; the whole history is there
 HabitSetDay(1, "2026-06-10")                 ; today goes the normal way
 Ok("today ticks",  HabitDidToday(f) ? 1 : 0, 1)
 Ok("today counts", f.streak, 2)
+
+; ---- a dot's click goes round: done -> frozen -> not done -------------------
+Habits := []
+FakeToday := "2026-06-10"
+HabitAdd("walk")
+w := Habits[1]
+w.born := "2026-06-01"
+HabitCycleDay(1, "2026-06-08")
+Ok("cycle: empty to done",          HabitDid(w, "2026-06-08") ? 1 : 0, 1)
+HabitCycleDay(1, "2026-06-08")
+Ok("cycle: done to frozen",         (HabitRested(w, "2026-06-08") && !HabitDid(w, "2026-06-08")) ? 1 : 0, 1)
+HabitCycleDay(1, "2026-06-08")
+Ok("cycle: frozen to empty",        (HabitRested(w, "2026-06-08") || HabitDid(w, "2026-06-08")) ? 1 : 0, 0)
+; two freezes a month: use both, and the third done day skips blue
+HabitCycleDay(1, "2026-06-03"), HabitCycleDay(1, "2026-06-03")
+HabitCycleDay(1, "2026-06-04"), HabitCycleDay(1, "2026-06-04")
+HabitCycleDay(1, "2026-06-05")
+said := HabitCycleDay(1, "2026-06-05")
+Ok("cycle: none left, blue skipped", (HabitRested(w, "2026-06-05") || HabitDid(w, "2026-06-05")) ? 1 : 0, 0)
+Ok("cycle: and it says why",        said, "nofreeze")
+; give one back, and the blue step is there again
+HabitCycleDay(1, "2026-06-04")
+HabitCycleDay(1, "2026-06-05"), HabitCycleDay(1, "2026-06-05")
+Ok("cycle: a freeze given back is free again", HabitRested(w, "2026-06-05") ? 1 : 0, 1)
+; today goes round too (the 5th's freeze given back first, so one is left)
+HabitCycleDay(1, "2026-06-05")
+HabitCycleDay(1, "2026-06-10"), HabitCycleDay(1, "2026-06-10")
+Ok("cycle: today, frozen",          (HabitRested(w, "2026-06-10") && !HabitDidToday(w)) ? 1 : 0, 1)
+; freezes off in Settings: blue skipped, nothing to say
+RestPerMonth := 0
+HabitCycleDay(1, "2026-06-09")
+said := HabitCycleDay(1, "2026-06-09")
+Ok("cycle: freezes off, nothing said", said "|" (HabitDid(w, "2026-06-09") ? 1 : 0), "|0")
+RestPerMonth := 2
 
 ; ---- a tick taken back takes its best back ---------------------------------
 Habits := []

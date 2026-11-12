@@ -34,6 +34,7 @@ ShowNote(header, rowY := 0, prefill := "", hint := "") {
     y := py + (rowY ? rowY - 8 : 40)      ; level with the row it belongs to
     ClampWin(x, y, w, 96)
     BoxReset("Note")
+    SideOnTop("Note")
     Gui, Note:Show, x%x% y%y% AutoSize, Daybook note
     GuiControl, Note:Focus, NoteEdit
     if (prefill != "") {                  ; caret at the end, to add to it

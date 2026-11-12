@@ -37,6 +37,57 @@ MissSinceText(day) {
     return "since " MissDayName(day)
 }
 
+;--------------------------------------------------------------------------------
+; Deadlines - short term tasks
+;--------------------------------------------------------------------------------
+; Days from today to a deadline: 0 is today, 1 tomorrow, negative is past.
+DueDays(due) {
+    return DayNum(due) - DayNum(LogicalDay())
+}
+
+; What goes in front of a short term task on the panel: "today", "1d", "12d",
+; past 100 days months ("4mo"), past two years years ("3y") - the row has
+; little room, and the hover says the whole date.
+DueTag(due) {
+    n := DueDays(due)
+    if (n <= 0)
+        return "today"
+    return (n >= 730) ? Round(n / 365) "y" : (n >= 100) ? Round(n / 30) "mo" : n "d"
+}
+
+; The deadline in words: "today", "tomorrow", "Fri 14 Nov, in 4 days".
+DueText(due) {
+    n := DueDays(due)
+    if (n = 0)
+        return "today"
+    if (n = 1)
+        return "tomorrow"
+    FormatTime, s, % StrReplace(due, "-") "000000", ddd d MMM
+    return s ", in " n " days"
+}
+
+; Indexes into Tasks, soonest deadline first, and the tasks with no deadline
+; after all of them. Insertion sort: the lists are a handful long, and it
+; keeps tasks with the same day in the order they were added.
+DueSort(order) {
+    global Tasks
+    Loop % order.Length() - 1 {
+        k := A_Index + 1
+        v := order[k]
+        j := k - 1
+        while (j >= 1 && DueKey(Tasks[order[j]].due) > DueKey(Tasks[v].due)) {
+            order[j + 1] := order[j]
+            j--
+        }
+        order[j + 1] := v
+    }
+}
+
+; What DueSort compares: the day, or for no deadline a "day" later than any.
+DueKey(due) {
+    return (due = "") ? "9999-99-99" : due
+}
+
 RollIfNeeded() {
     CommitMark()                 ; a pending mark belongs to the day it happened
     today := LogicalDay()
@@ -65,7 +116,9 @@ RollIfNeeded() {
 ; line, not into a new one. Everything on Today's list goes in, and a long term
 ; task only if it was finished that day.
 ;
-; Unfinished work is never deleted. What was on Today's list and is still open
+; A short term task waits, deadline in front of it, and moves to MISSED only
+; once its deadline day is over; one with no deadline just waits. Unfinished work is never deleted. What was on
+; Today's list and is still open
 ; moves to MISSED, remembering this as the day it was meant for (since), and
 ; waits there to be told what happened - see Missed.ahk. Its carry count, and
 ; that of anything already waiting in MISSED, goes up by the days gone by: a
@@ -80,8 +133,10 @@ CloseDay() {
     ; A long term task finished before tasks remembered WHEN they were
     ; finished has no doneOn; it leaves the panel now like the rest, so it is
     ; recorded on this day rather than vanishing without a trace.
+    ; A short term task is on the day's list on its deadline day, and only then.
     for _, t in Tasks
-        if (t.list = "T" || t.doneOn = day || (t.status != "open" && t.doneOn = ""))
+        if (t.list = "T" || (t.list = "S" && t.due = day) || t.doneOn = day
+            || (t.status != "open" && t.doneOn = ""))
             Past.Push({day: day, id: t.id, list: t.list, status: t.status
                      , carry: t.carry, note: TaskNote(t, day), text: t.text})
     PastTime[day] := DayTimeText()
@@ -92,7 +147,13 @@ CloseDay() {
             continue
         if (t.list = "T")
             t.list := "M", t.since := day, t.carry += gap
-        else if (t.list = "M")
+        else if (t.list = "S" && t.due != "" && t.due < LogicalDay()) {
+            ; its deadline has gone by: a real miss, so it goes to MISSED
+            ; remembering the day it was due, and the xN counts the days since
+            late := DayNum(LogicalDay()) - DayNum(t.due)
+            t.list := "M", t.since := t.due, t.due := ""
+            t.carry += (late < 1) ? 1 : late
+        } else if (t.list = "M")
             t.carry += gap
         t.notes := {}                    ; the day's notes are in Past now
         keep.Push(t)

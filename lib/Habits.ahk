@@ -158,7 +158,43 @@ HabitToggle(i) {
     PendMark("H", i, "done")             ; held, like a task's tick - see CommitMark()
 }
 
-; A dot was clicked: tick or untick that day. Today is the tick box's business.
+; A dot was clicked. Each click moves the day one step round:
+;
+;   not done  ->  done (green)  ->  frozen (blue)  ->  not done
+;
+; the same order as the habit window's calendar. With no freeze left in that
+; day's month the blue step is skipped - done goes straight back to not done -
+; and the answer is "nofreeze", so the panel can say why. Freezes off in
+; Settings: skipped too, but nothing to say. Otherwise "".
+;
+; A freeze costs nothing to try: the allowance is counted from the frozen days
+; there ARE, so clicking on past blue gives the freeze back.
+HabitCycleDay(i, day) {
+    global Habits, RestPerMonth
+    h := Habits[i]
+    if (!h)
+        return ""
+    if (HabitRested(h, day)) {
+        HabitSetState(i, day, "none")
+        return ""
+    }
+    if (!HabitDid(h, day)) {
+        HabitSetDay(i, day)
+        return ""
+    }
+    if (day >= h.born && day <= LogicalDay() && HabitRestLeft(h, day)) {
+        ; today's tick may still be held for the grace period: dropped, not
+        ; written, so the journal does not say "ticked" and then "frozen"
+        if (day = LogicalDay())
+            CancelMark("H", i)
+        HabitSetState(i, day, "rest")
+        return ""
+    }
+    HabitSetDay(i, day)                  ; done -> not done
+    return (RestPerMonth > 0) ? "nofreeze" : ""
+}
+
+; Tick or untick a day. Today goes through the tick box's own road.
 HabitSetDay(i, day) {
     global Habits
     h := Habits[i]
@@ -362,33 +398,38 @@ HabitMeasure(h, asOfDay) {
     return HabitEvery(h.n, nums, rest, asOf)
 }
 
-; EVERY N DAYS. Two done days belong to one chain while fewer than n days that
-; were not rest days lie between them - every day (n 1) allows none, every
-; other day (n 2) allows one. The chain is still alive today while the days
-; since the last done one are within the same allowance; today itself is still
-; open. The streak is the number of days DONE in the chain: rest days hold it
-; together without adding to it.
+; EVERY N DAYS. A done day and a rest day are both ANCHORS: the day the habit
+; was due and was dealt with. Two anchors belong to one chain while fewer than
+; n days lie between them - every day (n 1) allows none, every other day (n 2)
+; allows one. The chain is still alive today while the days since the last
+; anchor are within the same allowance; today itself is still open. The streak
+; is the number of days DONE in the chain: a rest day holds it together without
+; adding to it.
+;
+; Why a rest day is an anchor and not just a day to skip: every other day,
+; done on Mon, due Wed, frozen Wed. The next due day is FRIDAY, two days after
+; the freeze - Thursday is a day off, not a miss. Skipping the rest day instead
+; made Thursday count as the second empty day since Monday, and the chain broke
+; on a day that was never due.
 HabitEvery(n, nums, rest, asOf) {
+    anchors := {}                        ; day number -> "d" done, "r" rest; an
+    for _, d in nums                     ; integer-keyed object walks in order
+        anchors[d] := "d"
+    for r in rest
+        if (!anchors.HasKey(r))
+            anchors[r] := "r"
     best := 0, run := 0, prev := ""
-    for _, d in nums {
-        run := (prev != "" && HabitGap(prev, d, rest) < n) ? run + 1 : 1
-        if (run > best)
+    for a, kind in anchors {
+        if (prev != "" && a - prev - 1 >= n)
+            run := 0                     ; n empty days went by: the chain broke
+        if (kind = "d" && ++run > best)
             best := run
-        prev := d
+        prev := a
     }
     streak := 0
-    if (prev != "" && (prev = asOf || HabitGap(prev, asOf, rest) < n))
+    if (prev != "" && (prev = asOf || asOf - prev - 1 < n))
         streak := run
     return {streak: streak, best: best}
-}
-
-; Days strictly between two day numbers that were not rest days.
-HabitGap(a, b, rest) {
-    g := b - a - 1
-    for r in rest
-        if (r > a && r < b)
-            g--
-    return g
 }
 
 ; N TIMES A WEEK. Counted in weeks: a week is KEPT when it has as many days
@@ -501,15 +542,17 @@ HabitDue(h) {
     return HabitBrokenBy(h, today)
 }
 
-; Had n days gone by undone - rest days not counted - by the end of this day?
-; For an every-N-days habit that is what makes a day a miss rather than one of
-; the days the rule allows off.
+; Had n days gone by undone by the end of this day, counting back to the last
+; done OR rest day? For an every-N-days habit that is what makes a day a miss
+; rather than one of the days the rule allows off. A rest day ends the count:
+; it dealt with the day it was taken on, so the clock starts again after it
+; (see HabitEvery).
 HabitBrokenBy(h, day) {
     n := h.n, miss := 0
     Loop {
-        if (day < h.born || HabitDid(h, day))
+        if (day < h.born || HabitDid(h, day) || HabitRested(h, day))
             return false
-        if (!HabitRested(h, day) && ++miss >= n)
+        if (++miss >= n)
             return true
         day := DayShift(day, -1)
     }
@@ -652,13 +695,13 @@ HabitWeekLost(h, day) {
 ; at a glance, but not a wall of alarm every morning. A rest day is the blue a
 ; declared break is.
 HabitDotColour(state) {
-    global CGreen, CRed, CTrack, CBlue
+    global CGreen, CRed, CToday, CBlue
     if (state = "done")
         return CGreen
     if (state = "miss")
         return CRed
     if (state = "todo")
-        return CTrack
+        return CToday
     if (state = "rest")
         return CBlue
     if (state = "off")

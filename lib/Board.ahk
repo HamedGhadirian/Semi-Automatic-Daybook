@@ -59,14 +59,21 @@ BoardRender() {
     if (lines != "")
         s .= "`n## missed`n`n" lines
 
-    for _, sect in [["T", "today"], ["L", "long term"]] {
+    for _, sect in [["T", "today"], ["S", "short term"], ["L", "long term"]] {
         s .= "`n## " sect[2] "`n`n"
         n := 0
         for _, t in Tasks {
             if (t.list != sect[1])
                 continue
-            s .= DayTaskLine({text: t.text, status: t.status, list: "", carry: t.carry
-                            , note: TaskNote(t, today)}) "`n"
+            line := DayTaskLine({text: t.text, status: t.status, list: "", carry: t.carry
+                               , note: TaskNote(t, today)})
+            ; the deadline goes after the words, before any note
+            if (t.list = "S" && t.due != "") {
+                due := "  " Chr(0x00B7) " due " t.due
+                p := InStr(line, "  " Chr(0x2014) " ")
+                line := p ? SubStr(line, 1, p - 1) due SubStr(line, p) : line due
+            }
+            s .= line "`n"
             n++
         }
         if (!n)

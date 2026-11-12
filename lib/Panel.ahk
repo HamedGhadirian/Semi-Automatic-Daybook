@@ -58,6 +58,14 @@ BuildPanel() {
     ; when the list is empty
     Gui, Panel:Add, Text, vAddBtn gAddClick x266 y34 w24 h20 Right c%CMuted% BackgroundTrans, +
 
+    ; between Today and Long term: what has a day to be done by
+    Gui, Panel:Font, s9 Bold, Segoe UI
+    Gui, Panel:Add, Text, vShortHdr gToggleShort x12 y60 w160 h17 c%CText% BackgroundTrans, SHORT TERM
+    Gui, Panel:Font, s8 Norm, Segoe UI
+    Gui, Panel:Add, Text, vShortCnt x176 y62 w26 h14 Center c%CMuted% BackgroundTrans,
+    Gui, Panel:Font, s12 Norm, Segoe UI
+    Gui, Panel:Add, Text, vShortAdd gShortAddClick x266 y58 w24 h20 Right c%CMuted% BackgroundTrans, +
+
     Gui, Panel:Font, s9 Bold, Segoe UI
     Gui, Panel:Add, Text, vLongHdr gToggleLong x12 y60 w160 h17 c%CText% BackgroundTrans, LONG TERM
     Gui, Panel:Font, s8 Norm, Segoe UI
@@ -206,7 +214,12 @@ DotHit(cx, cy) {
     if (!IsObject(d))
         return false
     ToolTip, , , , 7                     ; its hint described the day before the click
-    HabitSetDay(d.hab, d.day)
+    ; done -> frozen -> not done; when the blue step was skipped, say why - a
+    ; click that does something other than expected looks like a broken panel
+    if (HabitCycleDay(d.hab, d.day) = "nofreeze") {
+        FormatTime, mname, % StrReplace(d.day, "-") "000000", MMMM
+        FreezeSay("No freezes left in " mname ", so it went back to not done.")
+    }
     return true
 }
 

@@ -129,17 +129,22 @@ LineHeight(hwnd) {
 
 ; User-initiated, so this one DOES take focus - you just asked for somewhere to
 ; type. Nothing that appears on its own ever takes it.
-QuickAdd(list := "T") {
+; prefill is for coming BACK to the box: Esc on the deadline calendar returns
+; here with the words that were typed (see Due.ahk).
+QuickAdd(list := "T", prefill := "") {
     global CapMode, CapTask, CapList, CapHintAdd
     CapMode := "add", CapTask := 0
     CapList := list                        ; plain Enter goes to whichever list
     ; A habit has nowhere else to go, so the three-way hint would be a lie -
     ; every Enter here makes a habit. See CommitAdd().
     if (list = "H")
-        ShowCapture("", "Enter  a habit, every day from now on   "
+        ShowCapture(prefill, "Enter  a habit, every day from now on   "
                       . Chr(0x00B7) "   Esc cancel")
+    else if (list = "S")                   ; the deadline is asked for next
+        ShowCapture(prefill, "Enter  then pick the deadline   "
+                      . Chr(0x00B7) "   Esc cancel`nCtrl+Enter long term, no deadline")
     else
-        ShowCapture("", CapHintAdd)        ; the + you pressed belongs to
+        ShowCapture(prefill, CapHintAdd)   ; the + you pressed belongs to
 }
 
 ; Renaming a habit goes through the same box as everything else, and back out
@@ -174,6 +179,7 @@ ShowCapture(prefill, hint) {
     y := py
     ClampWin(x, y, w, 76)
     BoxReset("Cap")                        ; one line, then grown to fit below
+    SideOnTop("Cap")
     Gui, Cap:Show, x%x% y%y% AutoSize, Daybook capture
     GuiControl, Cap:Focus, CapEdit
     if (prefill != "") {                   ; caret at the end, nothing selected,
@@ -249,6 +255,14 @@ CommitAdd(list, status) {
     ; other list to put it in.
     if (CapList = "H") {
         HabitAdd(txt)
+        return
+    }
+    ; From the SHORT TERM +, a task needs a day before it exists: the calendar
+    ; opens, and the task is made when one is picked. Esc there adds nothing.
+    if (CapList = "S" && list = "S") {
+        txt := Trim(RegExReplace(txt, "[\r\n\t]+", " "))
+        if (txt != "")
+            DuePick("add", txt, 0)
         return
     }
     AddTask(txt, list, status)

@@ -18,13 +18,14 @@ in two folders on your PC
 blue a rest day. **Every dot is a button** - click Tuesday's and Tuesday is
 ticked, for the evening you did the thing and forgot to say so. Every day,
 every few days, or so many times a week; rest days for when you are sick or
-away. Right-click a habit for its calendar, where you can also bring in a
+away - click a dot again and a done day turns blue, frozen; once more and it
+is empty. Right-click a habit for its calendar, where you can also bring in a
 streak you kept somewhere else.
 
 ![A habit's calendar: three times a week, every week kept, with the streak in weeks](https://raw.githubusercontent.com/HamedPhixer/Semi-Automatic-Daybook/main/docs/images/calendar.png)
 
-**Tasks.** One list for today, one for later. Tick or cross one and a small box
-opens to say why. Anything unfinished waits under MISSED: say which day you did
+**Tasks.** One list for today, one for the short term (pick a deadline on a
+small calendar, or none), one for later. Tick or cross one and a small box opens to say why. Anything unfinished waits under MISSED: say which day you did
 it, drop it, or put it back on today.
 
 **A sit timer.** Green, amber at 30 minutes, red and breathing at 45. It only
