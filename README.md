@@ -19,6 +19,13 @@ forgot to say so. Every day, every few days, or so many times a week. Click a
 done dot again and it turns blue: a rest day, for when you are sick or away.
 Right-click a habit for its calendar.
 
+<details>
+<summary><b>A habit's calendar</b></summary>
+
+![A habit's calendar: three times a week, every week kept so far, with the streak in weeks](https://raw.githubusercontent.com/HamedGhadirian/Semi-Automatic-Daybook/main/docs/images/calendar.png)
+
+</details>
+
 **Tasks.** One list for today, one for the short term (with a deadline, or
 none), one for later. Tick one and a small box asks for a note. Right-click a
 task: **Drop** if it won't happen (the day keeps it crossed, with why), or
