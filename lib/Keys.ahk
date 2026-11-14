@@ -1,9 +1,10 @@
 ﻿;================================================================================
-; Hotkeys
+; Hotkeys of Daybook's own - the two real keys are the kit's (Config.ahk)
 ;================================================================================
 ; Mode and always on top are switches on the panel, and adding a task is its +.
-#F6::CyclePanel()
-#F1::ToggleBreak()
+; The panel key and the break key are changeable in Settings > KEYS, so they
+; are in DaybookKeys(), not here.
+#Requires AutoHotkey v2.0
 
 ; Mouse clicks and wheel events count as presence; mouse MOVEMENT does not.
 ; "~" passes every one of them straight through, so nothing is swallowed or
@@ -17,9 +18,9 @@
 ~WheelUp::
 ~WheelDown::
 ~WheelLeft::
-~WheelRight::
-    LastClickTick := A_TickCount
-Return
+~WheelRight:: {
+    global LastClickTick := A_TickCount
+}
 
 ; The wheel, while the pointer is on a panel that has more in it than fits.
 ;
@@ -29,8 +30,7 @@ Return
 ; These take the wheel rather than passing it on - scrolling the window behind
 ; a panel you are pointing at is not what anybody means - and the plain
 ; ~WheelUp above still answers everywhere else.
-#If PanelCanScroll()
+#HotIf PanelCanScroll()
 WheelUp::PanelScroll(-1)
 WheelDown::PanelScroll(1)
-#If
-
+#HotIf

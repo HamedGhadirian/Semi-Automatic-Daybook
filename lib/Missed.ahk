@@ -1,34 +1,29 @@
-;================================================================================
+﻿;================================================================================
 ; Missed - what a day ended without
 ;================================================================================
 ; When a day closes, whatever on Today's list was left open moves to MISSED.
 ; Nothing is decided for you there: a task waits until you say what happened,
 ; and the section is not on the panel at all while it is empty. Each row has
-; three buttons:
+; two buttons, and the right-click menu a third way out:
 ;
 ;   tick   did it - a menu of the days since it was missed, and it is recorded
 ;          as done on the day you pick. A past day's note is rewritten to say so.
-;   cross  drop it - asks why first, and Esc keeps it, so a misclick costs
-;          nothing.
 ;   arrow  back onto Today's list - asks, once, why it was not done. However
 ;          many days it waited, it is one question, and the answer goes onto
 ;          the day it was meant for.
+;   Drop   (right-click) drop it - asks why first, and Esc keeps it, so a
+;          misclick costs nothing.
 ;
 ; t.since is that day - the last day it was on Today's list and not done.
 ; t.carry is how many days it has been left undone in all: the xN before its
 ; name.
-;
-; This replaced the review queue, where the amber + asked "not done yesterday -
-; why?" of every carried task. That queue was easy to miss, forgot its question
-; if a day went by unanswered, and had no way to say "I did it, I just did not
-; tick it".
 ;================================================================================
+#Requires AutoHotkey v2.0
 
 ; The note a finished day holds for this task - what the box opens with, so
 ; answering again changes it rather than piling a second one on.
 PastNote(id, day) {
-    global Past
-    for _, r in Past
+    for r in Past
         if (r.id = id && r.day = day)
             return r.note
     return ""
@@ -37,10 +32,9 @@ PastNote(id, day) {
 ; Where the pool row showing this task is now, for the note box to open level
 ; with it - 0 when it is scrolled off or the section is closed.
 RowYOf(i) {
-    global RowTask, RowY
     for n, ti in RowTask
         if (ti = i)
-            return RowY[n]
+            return At(RowY, n)
     return 0
 }
 
@@ -51,39 +45,33 @@ RowYOf(i) {
 ; most, and never past what Past still holds, since that is what lets an
 ; earlier day's note be rewritten.
 MissDidMenu(i) {
-    global MissMenuId, MissMenuDays, PastKeepDays
-    t := Tasks[i]
+    global MissMenuId
+    static m := ""
+    t := TaskAt(i)
     if (!t)
         return
     today := LogicalDay()
-    from := (t.since != "" && t.since < today) ? t.since : DayShift(today, -1)
-    MissMenuId := t.id, MissMenuDays := {}
-    Menu, Did, Add, placeholder, MenuNoop     ; so DeleteAll cannot fail first time
-    Menu, Did, DeleteAll
-    Menu, Did, Add, did it on..., MenuNoop
-    Menu, Did, Disable, did it on...
-    Menu, Did, Add
+    from := (t.since != "" && StrCompare(t.since, today) < 0) ? t.since : DayShift(today, -1)
+    MissMenuId := t.id
+    m := Menu()
+    m.Add("did it on...", (*) => 0)
+    m.Disable("did it on...")
+    m.Add()
     day := today
-    Loop % (PastKeepDays < 14 ? PastKeepDays : 14) {
-        name := MissDayName(day)
-        MissMenuDays[name] := day
-        Menu, Did, Add, %name%, MenuMissDid
-        if (day <= from)
+    loop Min(PastKeepDays, 14) {
+        m.Add(MissDayName(day), MissDone.Bind(t.id, day))
+        if (StrCompare(day, from) <= 0)
             break
         day := DayShift(day, -1)
     }
-    Menu, Did, Show
+    m.Show()
 }
-
-MenuMissDid:
-    MissDone(MissMenuId, MissMenuDays[A_ThisMenuItem])
-Return
 
 ; Done today: it goes onto Today's list ticked, like any task done today, and
 ; leaves at the end of the day. Done on an earlier day: it goes onto THAT day
 ; and off the panel - it is finished, and the day's note has it.
-MissDone(id, day) {
-    global Past, CurDay, NoteFor
+MissDone(id, day, *) {
+    global NoteFor
     i := TaskIndex(id)
     if (!i || day = "")
         return
@@ -98,30 +86,30 @@ MissDone(id, day) {
         return
     }
     found := false
-    for _, r in Past
+    for r in Past
         if (r.id = id && r.day = day)
             r.status := "done", found := true
     if (!found)
-        Past.Push({day: day, id: id, list: "T", status: "done", carry: t.carry
-                 , note: "", text: t.text})
+        Past.Push(Rec({day: day, id: id, list: "T", status: "done", carry: t.carry
+                 , note: "", text: t.text}))
     Journal(Chr(0x2713) " " t.text "   (done " day ", ticked late)")
     Tasks.RemoveAt(i)
     SaveState()
     Refresh()
     DayNoteWrite(day, true)
-    NoteFor := {id: id, day: day}
+    NoteFor := {id: id, day: day, drop: false}
     ShowNote("done " MissDayName(day) " - anything worth remembering?  (optional)"
            , 0, PastNote(id, day))
 }
 
 ;--------------------------------------------------------------------------------
-; cross: drop it
+; Drop (right-click): drop it
 ;--------------------------------------------------------------------------------
 ; The box comes first and the drop only happens on Enter. Esc keeps the task,
-; which is what makes the cross safe to have beside the tick.
+; so a slip of the menu costs nothing.
 MissDropAsk(i, rowY := 0) {
     global NoteFor
-    t := Tasks[i]
+    t := TaskAt(i)
     if (!t)
         return
     NoteFor := {id: t.id, day: t.since, drop: true}
@@ -131,12 +119,11 @@ MissDropAsk(i, rowY := 0) {
 
 ; The day it was meant for keeps it, crossed, with the reason beside it.
 MissDropNow(id, day, txt) {
-    global Past, CurDay
     i := TaskIndex(id)
     if (!i)
         return
     CommitMark()
-    for _, r in Past
+    for r in Past
         if (r.id = id && r.day = day)
             r.status := "failed"
     Journal("- dropped: " Tasks[i].text "   (missed " MissSinceText(day) ")")
@@ -153,7 +140,7 @@ MissDropNow(id, day, txt) {
 ; question, and Esc skips it.
 MissToToday(i) {
     global NoteFor
-    t := Tasks[i]
+    t := TaskAt(i)
     if (!t)
         return
     CommitMark()
@@ -161,7 +148,7 @@ MissToToday(i) {
     Journal(Chr(0x2193) " back on today: " t.text "   (missed " MissSinceText(t.since) ")")
     SaveState()
     Refresh()
-    NoteFor := {id: t.id, day: t.since}
+    NoteFor := {id: t.id, day: t.since, drop: false}
     ShowNote("not done " MissSinceText(t.since) " - why?  (optional)   " t.text
            , RowYOf(i), PastNote(t.id, t.since))
 }

@@ -1,22 +1,21 @@
 ﻿;================================================================================
 ; The day
 ;================================================================================
+#Requires AutoHotkey v2.0
+
+; FakeToday: the tests' clock (State.ahk) - "" in the real run.
 LogicalDay() {
-    shift := -DayStartHour
-    t := A_Now
-    t += %shift%, Hours
-    FormatTime, d, %t%, yyyy-MM-dd
-    return d
+    if (FakeToday != "")
+        return FakeToday
+    return FormatTime(DateAdd(A_Now, -DayStartHour, "Hours"), "yyyy-MM-dd")
 }
 
 ; A day, n days from this one. "2026-09-20", -1 -> "2026-09-19", and it is the
 ; calendar that answers, so month ends, leap days and the turn of the year all
-; come out right without a single special case.
+; come out right without a single special case. Not a day at all: "".
 DayShift(day, n) {
-    t := RegExReplace(day, "-") "000000"
-    t += n, Days
-    FormatTime, d, %t%, yyyy-MM-dd
-    return d
+    try return FormatTime(DateAdd(StrReplace(day, "-") "000000", n, "Days"), "yyyy-MM-dd")
+    return ""
 }
 
 ; A day as it is said: "today", "yesterday", "Sat 26 Sep".
@@ -26,8 +25,13 @@ MissDayName(day) {
         return "today"
     if (day = DayShift(today, -1))
         return "yesterday"
-    FormatTime, s, % StrReplace(day, "-"), ddd d MMM
-    return s
+    return DayWords(day, "ddd d MMM")
+}
+
+; A day (yyyy-MM-dd) in words, any FormatTime pattern - "" for no day.
+DayWords(day, fmt) {
+    try return FormatTime(StrReplace(day, "-") "000000", fmt)
+    return ""
 }
 
 ; How long a MISSED task has waited: "yesterday", or "since Sat 26 Sep".
@@ -62,20 +66,18 @@ DueText(due) {
         return "today"
     if (n = 1)
         return "tomorrow"
-    FormatTime, s, % StrReplace(due, "-") "000000", ddd d MMM
-    return s ", in " n " days"
+    return DayWords(due, "ddd d MMM") ", in " n " days"
 }
 
 ; Indexes into Tasks, soonest deadline first, and the tasks with no deadline
 ; after all of them. Insertion sort: the lists are a handful long, and it
 ; keeps tasks with the same day in the order they were added.
 DueSort(order) {
-    global Tasks
-    Loop % order.Length() - 1 {
+    loop order.Length - 1 {
         k := A_Index + 1
         v := order[k]
         j := k - 1
-        while (j >= 1 && DueKey(Tasks[order[j]].due) > DueKey(Tasks[v].due)) {
+        while (j >= 1 && StrCompare(DueKey(Tasks[order[j]].due), DueKey(Tasks[v].due)) > 0) {
             order[j + 1] := order[j]
             j--
         }
@@ -89,6 +91,7 @@ DueKey(due) {
 }
 
 RollIfNeeded() {
+    global CurDay, SitSec, AwaySec, CutShort, AppSec, HourSec
     CommitMark()                 ; a pending mark belongs to the day it happened
     today := LogicalDay()
     if (CurDay = today) {
@@ -101,7 +104,7 @@ RollIfNeeded() {
         CloseDay()
     CurDay := today
     SitSec := 0, AwaySec := 0, CutShort := 0
-    AppSec := {}, HourSec := {}
+    AppSec := DayMap(), HourSec := DayMap()
     HabitSettle()                ; yesterday is settled: chains kept or broken
     SaveState()
     RollupRun()                  ; a week or a month may have just ended
@@ -117,15 +120,15 @@ RollIfNeeded() {
 ; task only if it was finished that day.
 ;
 ; A short term task waits, deadline in front of it, and moves to MISSED only
-; once its deadline day is over; one with no deadline just waits. Unfinished work is never deleted. What was on
-; Today's list and is still open
-; moves to MISSED, remembering this as the day it was meant for (since), and
-; waits there to be told what happened - see Missed.ahk. Its carry count, and
-; that of anything already waiting in MISSED, goes up by the days gone by: a
-; week with the PC off is a week, not one day. Finished work leaves the panel,
-; long term included: it is done, and the note has it.
+; once its deadline day is over; one with no deadline just waits. Unfinished
+; work is never deleted. What was on Today's list and is still open moves to
+; MISSED, remembering this as the day it was meant for (since), and waits
+; there to be told what happened - see Missed.ahk. Its carry count, and that of
+; anything already waiting in MISSED, goes up by the days gone by: a week with
+; the PC off is a week, not one day. Finished work leaves the panel, long term
+; included: it is done, and the note has it.
 CloseDay() {
-    global Tasks, Past, PastTime, CurDay
+    global Tasks
     day := CurDay
     gap := DayNum(LogicalDay()) - DayNum(day)
     if (gap < 1)
@@ -134,28 +137,29 @@ CloseDay() {
     ; finished has no doneOn; it leaves the panel now like the rest, so it is
     ; recorded on this day rather than vanishing without a trace.
     ; A short term task is on the day's list on its deadline day, and only then.
-    for _, t in Tasks
+    for t in Tasks
         if (t.list = "T" || (t.list = "S" && t.due = day) || t.doneOn = day
             || (t.status != "open" && t.doneOn = ""))
-            Past.Push({day: day, id: t.id, list: t.list, status: t.status
-                     , carry: t.carry, note: TaskNote(t, day), text: t.text})
+            Past.Push(Rec({day: day, id: t.id, list: t.list, status: t.status
+                     , carry: t.carry, note: TaskNote(t, day), text: t.text}))
     PastTime[day] := DayTimeText()
     DayNoteWrite(day, true)              ; the last word, time and all
     keep := []
-    for _, t in Tasks {
+    today := LogicalDay()
+    for t in Tasks {
         if (t.status != "open")
             continue
         if (t.list = "T")
             t.list := "M", t.since := day, t.carry += gap
-        else if (t.list = "S" && t.due != "" && t.due < LogicalDay()) {
+        else if (t.list = "S" && t.due != "" && StrCompare(t.due, today) < 0) {
             ; its deadline has gone by: a real miss, so it goes to MISSED
             ; remembering the day it was due, and the xN counts the days since
-            late := DayNum(LogicalDay()) - DayNum(t.due)
+            late := DayNum(today) - DayNum(t.due)
             t.list := "M", t.since := t.due, t.due := ""
             t.carry += (late < 1) ? 1 : late
         } else if (t.list = "M")
             t.carry += gap
-        t.notes := {}                    ; the day's notes are in Past now
+        t.notes := DayMap()              ; the day's notes are in Past now
         keep.Push(t)
     }
     Tasks := keep
@@ -165,14 +169,17 @@ CloseDay() {
 ; Finished days are kept PastKeepDays, then let go. The day notes keep them for
 ; good - this is only what Daybook needs to be able to rewrite one.
 PastPrune() {
-    global Past, PastTime, PastKeepDays
+    global Past
     cut := DayShift(LogicalDay(), -PastKeepDays)
     keep := []
-    for _, r in Past
-        if !(r.day < cut)
+    for r in Past
+        if !(StrCompare(r.day, cut) < 0)
             keep.Push(r)
     Past := keep
-    for day in PastTime.Clone()
-        if (day < cut)
-            PastTime.Delete(day)
+    old := []
+    for day in PastTime
+        if (StrCompare(day, cut) < 0)
+            old.Push(day)
+    for day in old
+        PastTime.Delete(day)
 }

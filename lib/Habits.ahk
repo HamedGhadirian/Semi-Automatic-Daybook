@@ -1,4 +1,4 @@
-;================================================================================
+﻿;================================================================================
 ; Habits - the things you want to keep doing, and how long you have kept it up
 ;================================================================================
 ; A habit is not a task. A task is done once and gone; a habit comes back
@@ -32,25 +32,31 @@
 ; road. The whole history is kept, for the same reason: a streak longer than
 ; the history cannot be measured.
 ;
+; Days are text, yyyy-MM-dd, so two of them are compared with StrCompare -
+; AutoHotkey v2's < and > only take numbers.
+;
 ; IN OBSIDIAN - each day's note has the habits in Daybook's block, with the run
 ; each one had reached that day (DayBlock in Journal.ahk), and Daybook.md has the
 ; streaks and two weeks of them (Board.ahk). Ticking a day late rewrites that
 ; day's block, so the note never disagrees with the dots.
 ;================================================================================
+#Requires AutoHotkey v2.0
 
 ; A habit's whole record. Nothing else creates one. kind "D" is every n days
 ; (n 1 is every day), "W" is n times a week.
 HabitNew(text) {
-    return {text: text, born: LogicalDay(), streak: 0, best: 0, total: 0
-          , done: [], rest: [], kind: "D", n: 1, unit: "W"}
+    return Rec({text: text, born: LogicalDay(), streak: 0, best: 0, total: 0
+          , done: [], rest: [], kind: "D", n: 1, unit: "W"})
 }
 
+; Habits[i], or "" when there is no such place in the list.
+HabitAt(i) => (IsInteger(i) && i >= 1 && i <= Habits.Length) ? Habits[i] : ""
+
 HabitAdd(text) {
-    global Habits
     text := Trim(RegExReplace(text, "[\r\n\t]+", " "))
     if (text = "")
         return
-    for _, h in Habits
+    for h in Habits
         if (h.text = text)               ; the same habit twice is never meant
             return
     Habits.Push(HabitNew(text))
@@ -60,9 +66,9 @@ HabitAdd(text) {
 }
 
 HabitRename(i, newText) {
-    global Habits, HabEdName
+    global HabEdName
     newText := Trim(RegExReplace(newText, "[\r\n\t]+", " "))
-    h := Habits[i]
+    h := HabitAt(i)
     if (!h || newText = "" || newText == h.text)     ; == so case counts
         return
     old := h.text
@@ -77,12 +83,11 @@ HabitRename(i, newText) {
 }
 
 HabitDelete(i) {
-    global Habits
-    h := Habits[i]
+    h := HabitAt(i)
     if (!h)
         return
     ; RemoveAt shifts every index above this one, so nothing may be left
-    ; pointing at a row by number - the same trap MenuDelete documents.
+    ; pointing at a row by number - the same trap DeleteTask documents.
     if (!CancelMark("H", i))
         CommitMark()
     Habits.RemoveAt(i)
@@ -100,13 +105,13 @@ HabitDelete(i) {
 HabitDid(h, day) {
     if (!IsObject(h.set))
         HabitIndexDays(h)
-    return h.set.HasKey(day)
+    return h.set.Has(day)
 }
 
 HabitRested(h, day) {
     if (!IsObject(h.restSet))
         HabitIndexDays(h)
-    return h.restSet.HasKey(day)
+    return h.restSet.Has(day)
 }
 
 HabitDidToday(h) {
@@ -116,10 +121,10 @@ HabitDidToday(h) {
 HabitIndexDays(h) {
     if (!IsObject(h.rest))
         h.rest := []
-    set := {}, restSet := {}
-    for _, d in h.done
+    set := Map(), restSet := Map()
+    for d in h.done
         set[d] := 1
-    for _, d in h.rest
+    for d in h.rest
         restSet[d] := 1
     h.set := set, h.restSet := restSet
 }
@@ -130,8 +135,7 @@ HabitIndexDays(h) {
 ; Tick or untick TODAY - the tick box. Held for the grace period like a task's
 ; tick, so a misclick taken back at once is never written anywhere.
 HabitToggle(i) {
-    global Habits
-    h := Habits[i]
+    h := HabitAt(i)
     if (!h)
         return
     today := LogicalDay()
@@ -170,8 +174,7 @@ HabitToggle(i) {
 ; A freeze costs nothing to try: the allowance is counted from the frozen days
 ; there ARE, so clicking on past blue gives the freeze back.
 HabitCycleDay(i, day) {
-    global Habits, RestPerMonth
-    h := Habits[i]
+    h := HabitAt(i)
     if (!h)
         return ""
     if (HabitRested(h, day)) {
@@ -182,7 +185,7 @@ HabitCycleDay(i, day) {
         HabitSetDay(i, day)
         return ""
     }
-    if (day >= h.born && day <= LogicalDay() && HabitRestLeft(h, day)) {
+    if (StrCompare(day, h.born) >= 0 && StrCompare(day, LogicalDay()) <= 0 && HabitRestLeft(h, day)) {
         ; today's tick may still be held for the grace period: dropped, not
         ; written, so the journal does not say "ticked" and then "frozen"
         if (day = LogicalDay())
@@ -196,8 +199,7 @@ HabitCycleDay(i, day) {
 
 ; Tick or untick a day. Today goes through the tick box's own road.
 HabitSetDay(i, day) {
-    global Habits
-    h := Habits[i]
+    h := HabitAt(i)
     if (!h)
         return
     if (day = LogicalDay()) {
@@ -213,9 +215,8 @@ HabitSetDay(i, day) {
 ; day's note is rewritten to match. False when it could not be done: a day out
 ; of range, or a rest day when the month has none left.
 HabitSetState(i, day, state) {
-    global Habits
-    h := Habits[i]
-    if (!h || day > LogicalDay() || day < h.born)
+    h := HabitAt(i)
+    if (!h || StrCompare(day, LogicalDay()) > 0 || StrCompare(day, h.born) < 0)
         return false
     was := HabitDid(h, day) ? "done" : HabitRested(h, day) ? "rest" : "none"
     if (was = state)
@@ -244,9 +245,8 @@ HabitSetState(i, day, state) {
 ; Is there a rest day left in that day's month? RestPerMonth of them, per
 ; habit, per calendar month; 0 turns rest days off.
 HabitRestLeft(h, day) {
-    global RestPerMonth
     month := SubStr(day, 1, 7), used := 0
-    for _, d in h.rest
+    for d in h.rest
         if (SubStr(d, 1, 7) = month && d != day)
             used++
     return used < RestPerMonth
@@ -257,28 +257,27 @@ HabitRestLeft(h, day) {
 ; moves back to the first of them if it has to. lastDay is today when today is
 ; already done, yesterday when it is not.
 HabitImport(i, days, lastDay) {
-    global Habits
-    h := Habits[i]
+    h := HabitAt(i)
     days := Round(days)
-    if (!h || days < 1 || lastDay > LogicalDay())
+    if (!h || days < 1 || StrCompare(lastDay, LogicalDay()) > 0)
         return
     first := DayShift(lastDay, 1 - days)
     s := ""
-    for _, d in h.done
+    for d in h.done
         s .= d "`n"
     d := first
-    Loop % days {
+    loop days {
         s .= d "`n"
         d := DayShift(d, 1)
     }
-    Sort, s, R U                         ; newest first, each day once
+    s := Sort(s, "R U")                  ; newest first, each day once
     h.done := StrSplit(Trim(s, "`n"), "`n")
     keep := []                           ; a rest day inside it is a done day now
-    for _, d in h.rest
-        if (d < first || d > lastDay)
+    for d in h.rest
+        if (StrCompare(d, first) < 0 || StrCompare(d, lastDay) > 0)
             keep.Push(d)
     h.rest := keep
-    if (first < h.born)
+    if (StrCompare(first, h.born) < 0)
         h.born := first
     HabitCompute(h)
     SaveState()
@@ -288,12 +287,11 @@ HabitImport(i, days, lastDay) {
 
 ; How often. kind "D" with n: every n days. kind "W" with n: n times a week.
 HabitSetRule(i, kind, n) {
-    global Habits
-    h := Habits[i]
+    h := HabitAt(i)
     if (!h)
         return
     kind := (kind = "W") ? "W" : "D"
-    n := Round(n)
+    n := IsNumber(n) ? Round(n) : 1
     n := (n < 1) ? 1 : (kind = "W" && n > 7) ? 7 : (n > 60) ? 60 : n
     if (h.kind = kind && h.n = n)
         return
@@ -312,20 +310,20 @@ HabitRuleText(h) {
 
 ; The lists are newest first, each day once.
 HabitInsertDay(list, day) {
-    at := list.Length() + 1
+    pos := list.Length + 1
     for k, d in list {
         if (d = day)
             return
-        if (d < day) {
-            at := k
+        if (StrCompare(d, day) < 0) {
+            pos := k
             break
         }
     }
-    list.InsertAt(at, day)
+    list.InsertAt(pos, day)
 }
 
 HabitDropDay(list, day) {
-    k := list.Length()
+    k := list.Length
     while (k >= 1) {
         if (list[k] = day)
             list.RemoveAt(k)
@@ -339,9 +337,8 @@ HabitDropDay(list, day) {
 ; Days become plain numbers (days since 2000-01-01) so that "how far apart" is
 ; a subtraction rather than a trip through the calendar for every day.
 DayNum(day) {
-    t := SubStr(day, 1, 4) SubStr(day, 6, 2) SubStr(day, 9, 2)
-    t -= 20000101, Days
-    return t
+    try return DateDiff(SubStr(day, 1, 4) SubStr(day, 6, 2) SubStr(day, 9, 2), "20000101", "Days")
+    return 0
 }
 
 ; The Monday-to-Sunday week a day number falls in. 2000-01-03, day 2, was a
@@ -355,19 +352,18 @@ WeekOf(n) {
 ; break a chain without anything being clicked.
 HabitCompute(h) {
     HabitIndexDays(h)
-    if (!h.HasKey("kind") || h.kind = "")
+    if (h.kind = "")
         h.kind := "D", h.n := 1
     r := HabitMeasure(h, LogicalDay())
-    h.streak := r.streak, h.best := r.best, h.total := h.done.Length()
+    h.streak := r.streak, h.best := r.best, h.total := h.done.Length
     ; the run in days as well - the same as the streak for a day-counted habit
-    h.streakDays := r.HasKey("streakDays") ? r.streakDays : r.streak
-    h.bestDays   := r.HasKey("bestDays")   ? r.bestDays   : r.best
+    h.streakDays := r.HasProp("streakDays") ? r.streakDays : r.streak
+    h.bestDays   := r.HasProp("bestDays")   ? r.bestDays   : r.best
 }
 
 ; Every habit - at start and at the turn of the day.
 HabitSettle() {
-    global Habits
-    for _, h in Habits
+    for h in Habits
         HabitCompute(h)
 }
 
@@ -380,15 +376,15 @@ HabitStreakAt(h, day) {
 HabitMeasure(h, asOfDay) {
     asOf := DayNum(asOfDay)
     nums := []                           ; the days done up to asOf, oldest first
-    k := h.done.Length()
+    k := h.done.Length
     while (k >= 1) {
         d := DayNum(h.done[k])
         if (d <= asOf)
             nums.Push(d)
         k--
     }
-    rest := {}
-    for _, d in h.rest {
+    rest := Map()
+    for d in h.rest {
         r := DayNum(d)
         if (r <= asOf)
             rest[r] := 1
@@ -412,23 +408,23 @@ HabitMeasure(h, asOfDay) {
 ; made Thursday count as the second empty day since Monday, and the chain broke
 ; on a day that was never due.
 HabitEvery(n, nums, rest, asOf) {
-    anchors := {}                        ; day number -> "d" done, "r" rest; an
-    for _, d in nums                     ; integer-keyed object walks in order
+    anchors := Map()                     ; day number -> "d" done, "r" rest; a
+    for d in nums                        ; Map walks its number keys in order
         anchors[d] := "d"
     for r in rest
-        if (!anchors.HasKey(r))
+        if (!anchors.Has(r))
             anchors[r] := "r"
-    best := 0, run := 0, prev := ""
+    best := 0, chain := 0, prev := ""
     for a, kind in anchors {
         if (prev != "" && a - prev - 1 >= n)
-            run := 0                     ; n empty days went by: the chain broke
-        if (kind = "d" && ++run > best)
-            best := run
+            chain := 0                     ; n empty days went by: the chain broke
+        if (kind = "d" && ++chain > best)
+            best := chain
         prev := a
     }
     streak := 0
     if (prev != "" && (prev = asOf || asOf - prev - 1 < n))
-        streak := run
+        streak := chain
     return {streak: streak, best: best}
 }
 
@@ -442,28 +438,28 @@ HabitWeeks(n, nums, rest, born, asOf) {
     wNow := WeekOf(asOf), wBorn := WeekOf(born)
     if (wBorn > wNow)
         return {streak: 0, best: 0, streakDays: 0, bestDays: 0}
-    done := {}, rested := {}
-    for _, d in nums {
+    done := Map(), rested := Map()
+    for d in nums {
         w := WeekOf(d)
-        done[w] := (done.HasKey(w) ? done[w] : 0) + 1
+        done[w] := (done.Has(w) ? done[w] : 0) + 1
     }
     for r in rest {
         w := WeekOf(r)
-        rested[w] := (rested.HasKey(w) ? rested[w] : 0) + 1
+        rested[w] := (rested.Has(w) ? rested[w] : 0) + 1
     }
     ; The same walk counts the run two ways: in weeks kept, and in DAYS done
     ; inside the run - every week that has not broken it, the open one and a
     ; bridge included. Which of the two the panel shows is the habit's own
     ; choice (h.unit); the chain is the same chain either way.
-    best := 0, run := 0, bestDays := 0, runDays := 0, w := wBorn
+    best := 0, chain := 0, bestDays := 0, runDays := 0, w := wBorn
     while (w <= wNow) {
         v := HabitWeekVerdict(w, n, done, rested, born, wBorn, wNow)
         if (v = "fail") {
-            run := 0, runDays := 0
+            chain := 0, runDays := 0
         } else {
-            if (v = "kept" && ++run > best)
-                best := run
-            runDays += done.HasKey(w) ? done[w] : 0
+            if (v = "kept" && ++chain > best)
+                best := chain
+            runDays += done.Has(w) ? done[w] : 0
             if (runDays > bestDays)
                 bestDays := runDays
         }
@@ -476,15 +472,15 @@ HabitWeeks(n, nums, rest, born, asOf) {
             break
         if (v = "kept")
             streak++
-        streakDays += done.HasKey(w) ? done[w] : 0
+        streakDays += done.Has(w) ? done[w] : 0
         w--
     }
     return {streak: streak, best: best, streakDays: streakDays, bestDays: bestDays}
 }
 
 HabitWeekVerdict(w, n, done, rested, born, wBorn, wNow) {
-    c := done.HasKey(w) ? done[w] : 0
-    need := n - (rested.HasKey(w) ? rested[w] : 0)
+    c := done.Has(w) ? done[w] : 0
+    need := n - (rested.Has(w) ? rested[w] : 0)
     if (w = wBorn) {
         left := w * 7 + 8 - born + 1     ; the habit's first day to that Sunday
         if (left < need)
@@ -501,14 +497,14 @@ HabitWeekVerdict(w, n, done, rested, born, wBorn, wNow) {
 HabitWeekProgress(h, day) {
     num := DayNum(day), w := WeekOf(num)
     c := 0, r := 0
-    for _, d in h.done {
+    for d in h.done {
         dn := DayNum(d)
         if (dn < w * 7 + 2)
             break                        ; newest first: nothing older is in it
         if (WeekOf(dn) = w && dn <= num)
             c++
     }
-    for _, d in h.rest
+    for d in h.rest
         if (WeekOf(DayNum(d)) = w)
             r++
     need := h.n - r
@@ -549,8 +545,8 @@ HabitDue(h) {
 ; (see HabitEvery).
 HabitBrokenBy(h, day) {
     n := h.n, miss := 0
-    Loop {
-        if (day < h.born || HabitDid(h, day) || HabitRested(h, day))
+    loop {
+        if (day = "" || StrCompare(day, h.born) < 0 || HabitDid(h, day) || HabitRested(h, day))
             return false
         if (++miss >= n)
             return true
@@ -564,7 +560,6 @@ HabitBrokenBy(h, day) {
 ; Which habit has this name, or 0. Names are unique ignoring case - HabitAdd
 ; refuses a second one - so ignoring case here finds the same one it would.
 HabitIndex(name) {
-    global Habits
     for i, h in Habits
         if (h.text = name)
             return i
@@ -586,19 +581,18 @@ HabitIndex(name) {
 HabitFixNote(day, name, did) {
     global NoteBusy
     was := NoteBusy, NoteBusy := 1       ; see DayNoteWrite()
-    HabitFixNoteNow(day, name, did)
+    try HabitFixNoteNow(day, name, did)
     NoteBusy := was
 }
 
 HabitFixNoteNow(day, name, did) {
-    global JournalOn
     if (!JournalOn)
         return
     f := JournalFile(day, true)
     if (!FileExist(f))
         return
-    FileRead, s, *P65001 %f%
-    if (ErrorLevel)
+    try s := FileRead(f, "UTF-8")
+    catch
         return
     nl := InStr(s, "`r`n") ? "`r`n" : "`n"
     lines := StrSplit(StrReplace(s, "`r"), "`n")
@@ -616,14 +610,15 @@ HabitFixNoteNow(day, name, did) {
             continue
         if (RegExMatch(line, "^habits-done::"))
             countAt := k
-        else if (RegExMatch(line, "^(\s*[-*+]\s+\[)(.)(\]\s+)(.*?)(\s+\(streak::[^)]*\))?\s*$", m)) {
+        else if (RegExMatch(line, "^(\s*[-*+]\s+\[)(.)(\]\s+)(.*?)(\s+\(streak::[^)]*\))?\s*$", &m)) {
             live++
-            if (Trim(m4) = name) {
-                box := did ? "x" : " "
-                if (m2 != box)
-                    lines[k] := m1 box m3 m4 m5, m2 := box, changed := 1
+            box := m[2]
+            if (Trim(m[4]) = name) {
+                want := did ? "x" : " "
+                if (box != want)
+                    lines[k] := m[1] want m[3] m[4] m[5], box := want, changed := 1
             }
-            if (m2 != " ")
+            if (box != " ")
                 done++
         }
     }
@@ -633,13 +628,7 @@ HabitFixNoteNow(day, name, did) {
     out := ""
     for k, line in lines
         out .= (k > 1 ? nl : "") line
-    ; The * is binary mode. Without it FileAppend turns every `n into `r`n on
-    ; the way out, and the file would come back with line ends it never had.
-    tmp := f ".tmp"
-    FileDelete, %tmp%
-    FileAppend, %out%, *%tmp%, UTF-8
-    if (!ErrorLevel)
-        FileMove, %tmp%, %f%, 1
+    NoteReplace(f, out)
 }
 
 ;================================================================================
@@ -647,9 +636,8 @@ HabitFixNoteNow(day, name, did) {
 ;================================================================================
 ; How many are ticked today.
 HabitsDone() {
-    global Habits
     n := 0
-    for _, h in Habits
+    for h in Habits
         if (HabitDidToday(h))
             n++
     return n
@@ -662,7 +650,7 @@ HabitsDone() {
 ; broke. For a week-counted habit that is the day the week could no longer be
 ; made, and every undone day after it that week.
 HabitDayState(h, day, today) {
-    if (day < h.born)
+    if (StrCompare(day, h.born) < 0)
         return "none"
     if (HabitDid(h, day))
         return "done"
@@ -682,7 +670,7 @@ HabitWeekLost(h, day) {
     p := HabitWeekProgress(h, day)
     num := DayNum(day)
     left := 0, d := day
-    Loop % WeekOf(num) * 7 + 8 - num {           ; the days after it, to Sunday
+    loop WeekOf(num) * 7 + 8 - num {             ; the days after it, to Sunday
         d := DayShift(d, 1)
         if (!HabitRested(h, d))
             left++
@@ -695,7 +683,6 @@ HabitWeekLost(h, day) {
 ; at a glance, but not a wall of alarm every morning. A rest day is the blue a
 ; declared break is.
 HabitDotColour(state) {
-    global CGreen, CRed, CToday, CBlue
     if (state = "done")
         return CGreen
     if (state = "miss")
@@ -705,8 +692,8 @@ HabitDotColour(state) {
     if (state = "rest")
         return CBlue
     if (state = "off")
-        return "3A4052"
-    return "8A2A3C"                      ; "old"
+        return COff
+    return COld                          ; "old"
 }
 
 ; A streak as it is shown - the current one, or the best with best true. A
@@ -728,8 +715,7 @@ HabitInWeeks(h) {
 
 ; Count a week-counted habit's streak in weeks ("W") or in days ("D").
 HabitSetUnit(i, unit) {
-    global Habits
-    h := Habits[i]
+    h := HabitAt(i)
     unit := (unit = "D") ? "D" : "W"
     if (!h || h.unit = unit)
         return
@@ -741,7 +727,6 @@ HabitSetUnit(i, unit) {
 ; The number at the end of the row: green while the chain is safe for today,
 ; amber while it is alive but today needs doing, dim at zero.
 HabitStreakColour(h) {
-    global CGreen, CAmber, CDim
     ; by the number the row actually shows - weeks, or days if it was switched
     if ((h.kind = "W" && h.unit = "D" ? h.streakDays : h.streak) <= 0)
         return CDim

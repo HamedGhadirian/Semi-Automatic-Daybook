@@ -1,72 +1,25 @@
 ; Rules.test.ahk - how often, rest days, and a streak brought in from elsewhere
 ;
-; Loads the real lib\Habits.ahk with the clock faked, like Habits.test.ahk, and
-; walks each rule through real September 2026 dates: the 7th, 14th, 21st and
-; 28th are Mondays.
-;
-; Run it with run-tests.ps1 in this folder, or on its own.
-#NoEnv
-#SingleInstance off
-SetBatchLines -1
-
-global DayStartHour := 3, HabitDays := 7, RestPerMonth := 2, JournalOn := 0
-global Habits := []
-global CGreen := "G", CAmber := "A", CRed := "R", CTrack := "T", CDim := "D", CBlue := "B", CToday := "Y"
-global Fails := 0, Log := ""
-global FakeToday := ""
-
-LogicalDay() {
-    return FakeToday
-}
-DayShift(day, n) {
-    t := RegExReplace(day, "-") "000000"
-    t += n, Days
-    FormatTime, d, %t%, yyyy-MM-dd
-    return d
-}
-SaveState() {
-}
-Refresh() {
-}
-Journal(line) {
-}
-CommitMark() {
-}
-CancelMark(kind, i) {
-    return false
-}
-PendMark(kind, i, status) {
-}
-DayNoteWrite(day, force := false) {
-}
-JournalFile(day, fold := false) {
-    return ""
-}
-
-#Include %A_ScriptDir%\..\lib\Habits.ahk
-
-Ok(name, got, want) {
-    global Fails, Log
-    if (got . "" = want . "")
-        Log .= "  ok   " name "`n"
-    else
-        Log .= "  FAIL " name ": got [" got "] want [" want "]`n", Fails += 1
-}
+; The habit rules with the clock faked, like Habits.test.ahk, walking each
+; rule through real September 2026 dates: the 7th, 14th, 21st and 28th are
+; Mondays.
+#Requires AutoHotkey v2.0
+#Include %A_LineFile%\..\Harness.ahk
 
 ; A habit with a rule and a history, all at once.
 Make(name, kind, n, born, days, rests := "") {
-    global Habits, FakeToday
+    global FakeToday
     was := FakeToday
     FakeToday := born
     HabitAdd(name)
     FakeToday := was
-    h := Habits[Habits.Length()]
+    h := Habits[Habits.Length]
     h.born := born, h.kind := kind, h.n := n
     h.done := [], h.rest := []
-    for _, d in StrSplit(days, ",")
+    for d in StrSplit(days, ",")
         if (d != "")
             HabitInsertDay(h.done, "2026-09-" d)
-    for _, d in StrSplit(rests, ",")
+    for d in StrSplit(rests, ",")
         if (d != "")
             HabitInsertDay(h.rest, "2026-09-" d)
     HabitCompute(h)
@@ -141,7 +94,7 @@ r := Make("read", "D", 1, "2026-09-01", "10,11,13", "12")
 Ok("rest day holds the chain",       r.streak, 3)
 Ok("and does not count",             r.total, 3)
 Ok("the rest day is blue",           HabitDotColour(HabitDayState(r, "2026-09-12", FakeToday)), CBlue)
-i := Habits.Length()
+i := Habits.Length
 Ok("a second rest this month",       HabitSetState(i, "2026-09-05", "rest") ? 1 : 0, 1)
 Ok("a third is refused",             HabitSetState(i, "2026-09-06", "rest") ? 1 : 0, 0)
 Ok("refused means nothing changed",  HabitRested(r, "2026-09-06") ? 1 : 0, 0)
@@ -174,10 +127,10 @@ Ok("  and best follows",             w.best, 3)
 ; counted in days: every day done in that run of weeks, this one's included
 Ok("shown in weeks by default",      HabitStreakText(w), "3w")
 Ok("the same run in days: 3+2+3+1",  w.streakDays, 9)
-HabitSetUnit(Habits.Length(), "D")
+HabitSetUnit(Habits.Length, "D")
 Ok("switched to days",               HabitStreakText(w), "9")
 Ok("  best in days too",             HabitStreakText(w, true), "9")
-HabitSetUnit(Habits.Length(), "W")
+HabitSetUnit(Habits.Length, "W")
 Ok("and back to weeks",              HabitStreakText(w, true), "3w")
 ; a failed week ends the run in days as well as in weeks
 HabitDropDay(w.rest, "2026-09-19")
@@ -234,16 +187,16 @@ Ok("  and Thursday stays grey",       HabitDayState(k, "2026-10-01", FakeToday),
 FakeToday := "2026-09-13"
 c := Make("walk", "D", 1, "2026-09-01", "01,03,05,07,09,11,13")
 Ok("every day: broken every other day", c.streak, 1)
-HabitSetRule(Habits.Length(), "D", 2)
+HabitSetRule(Habits.Length, "D", 2)
 Ok("every other day: all of it holds", c.streak, 7)
 Ok("rule in words",                  HabitRuleText(c), "every other day")
-HabitSetRule(Habits.Length(), "W", 9)
+HabitSetRule(Habits.Length, "W", 9)
 Ok("a week has only 7 days",         c.n, 7)
 
 ; ---- a 778-day streak brought in -------------------------------------------------
 FakeToday := "2026-09-26"
 HabitAdd("duolingo")
-dl := Habits.Length()
+dl := Habits.Length
 d := Habits[dl]
 HabitInsertDay(d.rest, "2026-09-20")         ; a rest day inside it becomes a done day
 t0 := A_TickCount
@@ -253,24 +206,21 @@ Ok("778: streak",                    d.streak, 778)
 Ok("778: best",                      d.best, 778)
 Ok("778: days done",                 d.total, 778)
 Ok("778: born moves back",           d.born, DayShift("2026-09-25", -777))
-Ok("778: the rest day is gone",      d.rest.Length(), 0)
+Ok("778: the rest day is gone",      d.rest.Length, 0)
 Ok("778: still due today",           HabitDue(d) ? 1 : 0, 1)
 HabitToggle(dl)
 Ok("779 once today is ticked",       d.streak, 779)
 t0 := A_TickCount
-Loop 20
+loop 20
     HabitCompute(d)
 per := (A_TickCount - t0) / 20
 t0 := A_TickCount
-Loop 7000
+loop 7000
     HabitDid(d, "2025-01-01")
 look := A_TickCount - t0
 Ok("778: bringing it in is quick (under 1.5s)", took < 1500 ? 1 : 0, 1)
 Ok("778: a recount is quick (under 150ms)",     per < 150 ? 1 : 0, 1)
 Ok("778: a thousand repaints of dots, under 150ms", look < 150 ? 1 : 0, 1)
-Log .= "       (import " took "ms, recount " Round(per) "ms, 7000 lookups " look "ms)`n"
+T_Line("     (import " took "ms, recount " Round(per) "ms, 7000 lookups " look "ms)")
 
-FileDelete, %A_ScriptDir%\results-Rules.txt
-FileAppend, % (Fails ? Fails " FAILED`n" : "all passed`n") Log
-    , %A_ScriptDir%\results-Rules.txt, UTF-8
-ExitApp
+Done()

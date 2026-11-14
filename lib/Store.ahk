@@ -23,9 +23,42 @@
 ;   - A FILE THAT CANNOT BE READ IS NEVER SAVED OVER. It is moved aside as
 ;     Daybook-state.unreadable-<when>.txt, the newest backup that reads is
 ;     loaded in its place, and the tray says so.
+;
+; The file is the same in the v1 and the v2 Daybook, line for line.
+;================================================================================
+#Requires AutoHotkey v2.0
+
+;================================================================================
+; Records
+;================================================================================
+; A task, a habit, a finished day's line: an object whose missing fields read
+; as "" - the way they always did in v1, where a state file from an older
+; version simply has fewer of them. Asking HasProp still tells them apart.
+class DayRec {
+    __Get(name, params) => ""
+}
+
+Rec(o) {
+    o.base := DayRec.Prototype
+    return o
+}
+
+; arr[i], or "" when there is no such place - v1's arrays answered "" for one
+At(arr, i) => (IsInteger(i) && i >= 1 && i <= arr.Length && arr.Has(i)) ? arr[i] : ""
+
+; A table keyed by text that ignores case, the way v1's objects did, and
+; answers "" for a key it does not have.
+DayMap() {
+    m := Map()
+    m.CaseSense := "Off"
+    m.Default := ""
+    return m
+}
+
+;================================================================================
+; Saving
 ;================================================================================
 SaveState() {
-    global NextTaskId
     ; The first line says this file was written with an end line, so one that
     ; has it and not the end is known to be cut short. The version before skips
     ; a line it does not know. 3 is the first with a MISSED list - see LoadState.
@@ -39,28 +72,29 @@ SaveState() {
     ; (AddTask and RenameTask take them out), so nothing can push it along.
     ; doneOn went after the id the same way, then since, and a task's notes
     ; each have a line of their own after it: tnote, id, day, text.
-    for _, t in Tasks {
+    for t in Tasks {
         s .= "task`t" t.list "`t" t.status "`t" t.carry "`t" t.born "`t" t.due "`t" t.text "`t" t.id "`t" t.doneOn "`t" t.since "`n"
-        for day, note in t.notes
-            s .= "tnote`t" t.id "`t" day "`t" note "`n"
+        if IsObject(t.notes)
+            for day, note in t.notes
+                s .= "tnote`t" t.id "`t" day "`t" note "`n"
     }
     ; The name goes LAST on a habit line, so it is the only field that can
     ; contain anything - the days before it are a fixed shape.
-    for _, h in Habits {
+    for h in Habits {
         days := ""
-        for _, d in h.done
-            days .= (days ? "," : "") d
+        for d in h.done
+            days .= (days != "" ? "," : "") d
         s .= "habit`t" h.born "`t" h.streak "`t" h.best "`t" h.total "`t" days "`t" h.text "`n"
         ; How often, and the rest days, on a line of their own straight after:
         ; a habit line cannot grow past its name, and a line type the version
         ; before does not know is a line it skips.
         rests := ""
-        for _, d in h.rest
-            rests .= (rests ? "," : "") d
+        for d in h.rest
+            rests .= (rests != "" ? "," : "") d
         s .= "hrule`t" h.kind "`t" h.n "`t" rests "`t" (h.unit = "D" ? "D" : "W") "`n"
     }
     ; Finished days, for as long as they are kept - see CloseDay().
-    for _, r in Past
+    for r in Past
         s .= "past`t" r.day "`t" r.id "`t" r.list "`t" r.status "`t" r.carry "`t" r.note "`t" r.text "`n"
     for day, txt in PastTime
         s .= "ptime`t" day "`t" StrReplace(txt, "`n", "\n") "`n"
@@ -68,7 +102,7 @@ SaveState() {
         s .= "app`t" exe "`t" sec "`n"
     for k, sec in HourSec
         s .= "hour`t" k "`t" sec "`n"
-    StrReplace(s, "`n", "`n", lines)
+    StrReplace(s, "`n", "`n", , &lines)
     s .= "end`t" lines "`n"
     StateWrite(s)
     ; And the two things in Obsidian that show this state. Both write only if
@@ -78,26 +112,23 @@ SaveState() {
 }
 
 ; The file, through a temporary one that is read back before it replaces
-; anything. Binary mode (the *) so what is read back is byte for byte what was
-; meant - text mode would turn every `n into `r`n on the way out.
+; anything. No line-end translation, so what is read back is byte for byte
+; what was meant.
 StateWrite(s) {
-    global StateFile, StateNoSave
     static warned := false
     if (StateNoSave)
         return false                     ; see StateReadOrRecover
     StateBackup()
     tmp := StateFile ".tmp"
-    FileDelete, %tmp%
-    FileAppend, %s%, *%tmp%, UTF-8
-    ok := !ErrorLevel
-    if (ok) {
-        FileRead, back, *P65001 %tmp%
-        ok := !ErrorLevel && back == s
-    }
-    if (ok) {
-        FileMove, %tmp%, %StateFile%, 1
-        ok := !ErrorLevel
-    }
+    ok := false
+    try {
+        try FileDelete(tmp)
+        FileAppend(s, tmp, "UTF-8")
+        ok := (FileRead(tmp, "UTF-8") == s)
+        if ok
+            FileMove(tmp, StateFile, 1)
+    } catch
+        ok := false
     if (!ok) {
         ; Once, not every minute: the old file is whole and the next save tries
         ; again. What is in memory is not lost while Daybook runs.
@@ -122,20 +153,19 @@ StateValid(s) {
         return false
     if (SubStr(s, 1, 14) != "daybook-state`t")
         return SubStr(s, 1, 4) = "day`t"
-    last := InStr(s, "`n", false, 0)
-    if (!last || !RegExMatch(SubStr(s, last + 1), "^end\t(\d+)$", m))
+    last := InStr(s, "`n", false, -1)
+    if (!last || !RegExMatch(SubStr(s, last + 1), "^end\t(\d+)$", &m))
         return false
-    StrReplace(SubStr(s, 1, last), "`n", "`n", n)
-    return n = m1
+    StrReplace(SubStr(s, 1, last), "`n", "`n", , &n)
+    return n = Integer(m[1])
 }
 
 ; Before the first save of each day, the file as it stood - the state at the
 ; end of the last day anything changed. Only a file that reads is copied: a
 ; backup of a broken file would be no backup at all.
 StateBackup() {
-    global StateFile
     static done := ""
-    FormatTime, today, , yyyy-MM-dd
+    today := FormatTime(, "yyyy-MM-dd")
     if (done = today || !FileExist(StateFile))
         return                           ; no file yet: nothing to keep, ask again
     dir := StateBackupDir()
@@ -144,32 +174,33 @@ StateBackup() {
         done := today
         return
     }
-    FileRead, s, *P65001 %StateFile%
-    if (ErrorLevel || !StateValid(s))
+    try s := FileRead(StateFile, "UTF-8")
+    catch
         return
-    if (!InStr(FileExist(dir), "D"))
-        FileCreateDir, %dir%
-    FileCopy, %StateFile%, %dest%, 0
-    if (ErrorLevel)
+    if !StateValid(s)
+        return
+    try {
+        if !DirExist(dir)
+            DirCreate(dir)
+        FileCopy(StateFile, dest, 0)
+    } catch
         return                           ; not done: the next save tries again
     done := today
     StatePrune()
 }
 
 StateBackupDir() {
-    global StateFile
-    SplitPath, StateFile, , dir
+    SplitPath(StateFile, , &dir)
     return dir "\backups"
 }
 
 ; The backups' names, oldest first - the dates in them sort that way.
 StateBackups() {
     list := ""
-    Loop, Files, % StateBackupDir() "\Daybook-state-*.txt"
+    loop files StateBackupDir() "\Daybook-state-*.txt"
         if (RegExMatch(A_LoopFileName, "^Daybook-state-\d{4}-\d\d-\d\d\.txt$"))
             list .= A_LoopFileName "`n"
-    list := RTrim(list, "`n")
-    Sort, list
+    list := Sort(RTrim(list, "`n"))
     return (list = "") ? [] : StrSplit(list, "`n")
 }
 
@@ -177,26 +208,25 @@ StateBackups() {
 ; the same week and one seen months later can both be undone.
 StatePrune() {
     names := StateBackups()
-    keep := {}, firsts := []
-    for _, name in names
-        if (!firsts.Length() || SubStr(firsts[firsts.Length()], 15, 7) != SubStr(name, 15, 7))
+    keep := Map(), firsts := []
+    for name in names
+        if (!firsts.Length || SubStr(firsts[firsts.Length], 15, 7) != SubStr(name, 15, 7))
             firsts.Push(name)
-    Loop % (names.Length() < 10 ? names.Length() : 10)
-        keep[names[names.Length() - A_Index + 1]] := 1
-    Loop % (firsts.Length() < 6 ? firsts.Length() : 6)
-        keep[firsts[firsts.Length() - A_Index + 1]] := 1
+    loop Min(names.Length, 10)
+        keep[names[names.Length - A_Index + 1]] := 1
+    loop Min(firsts.Length, 6)
+        keep[firsts[firsts.Length - A_Index + 1]] := 1
     dir := StateBackupDir()
-    for _, name in names
-        if (!keep.HasKey(name))
-            FileDelete, %dir%\%name%
+    for name in names
+        if (!keep.Has(name))
+            try FileDelete(dir "\" name)
 }
 
 ; Said in the tray and in the log, because it matters and nobody is looking at
 ; a log.
 StateSay(msg) {
-    global StateQuiet                    ; the tests set it, to say nothing aloud
     if (!StateQuiet)
-        TrayTip, Daybook, %msg%, 10, 2
+        TrayTip(msg, "Daybook", 2 | 16)
     LogRaw("! " msg)
 }
 
@@ -205,22 +235,23 @@ StateSay(msg) {
 ; does read is used instead. A read that fails is tried three times first: a
 ; sync program can hold the file for a moment, and that is not damage.
 StateReadOrRecover() {
-    global StateFile, StateNoSave
+    global StateNoSave
     if (!FileExist(StateFile))
         return ""
-    Loop 3 {
-        FileRead, s, *P65001 %StateFile%
-        if (!ErrorLevel && StateValid(s))
-            return s
-        Sleep 200
+    loop 3 {
+        try {
+            s := FileRead(StateFile, "UTF-8")
+            if StateValid(s)
+                return s
+        }
+        Sleep(200)
     }
-    FormatTime, stamp, , yyyyMMdd-HHmmss
-    SplitPath, StateFile, , dir
-    bad := dir "\Daybook-state.unreadable-" stamp ".txt"
-    FileMove, %StateFile%, %bad%, 0
-    if (ErrorLevel) {
-        FileCopy, %StateFile%, %bad%, 0
-        if (ErrorLevel) {
+    SplitPath(StateFile, , &dir)
+    bad := dir "\Daybook-state.unreadable-" FormatTime(, "yyyyMMdd-HHmmss") ".txt"
+    try FileMove(StateFile, bad, 0)
+    catch {
+        try FileCopy(StateFile, bad, 0)
+        catch {
             ; Could not be read, and could not be set aside either - most
             ; likely something is holding it. Then this run must not save:
             ; the next save would put an empty state over the only copy.
@@ -231,13 +262,15 @@ StateReadOrRecover() {
         }
     }
     names := StateBackups()
-    k := names.Length()
+    k := names.Length
     while (k >= 1) {                     ; newest first
-        FileRead, s, % "*P65001 " StateBackupDir() "\" names[k]
-        if (!ErrorLevel && StateValid(s)) {
-            StateSay("The state file could not be read. It was set aside as "
-                   . bad " and the backup of " SubStr(names[k], 15, 10) " was loaded.")
-            return s
+        try {
+            s := FileRead(StateBackupDir() "\" names[k], "UTF-8")
+            if StateValid(s) {
+                StateSay("The state file could not be read. It was set aside as "
+                       . bad " and the backup of " SubStr(names[k], 15, 10) " was loaded.")
+                return s
+            }
         }
         k--
     }
@@ -246,69 +279,76 @@ StateReadOrRecover() {
     return ""
 }
 
+; A field of a state line: the n-th, or "" when the line is shorter.
+StateField(p, n) => (n <= p.Length) ? p[n] : ""
+
+; A number in a state line, or 0 when it is not one.
+StateNum(v) => IsNumber(v) ? Number(v) : 0
+
 LoadState() {
-    global NextTaskId, Past, PastTime
+    global CurDay, SitSec, NextTaskId
     s := StateReadOrRecover()
     if (s = "")
         return
     notes := [], ver := 0
-    Loop, Parse, s, `n, `r
-    {
+    loop parse s, "`n", "`r" {
         if (A_LoopField = "")
             continue
-        StringSplit, p, A_LoopField, %A_Tab%
-        if (p1 = "daybook-state")
-            ver := p2 + 0
-        else if (p1 = "day")
-            CurDay := p2
-        else if (p1 = "sit")
-            SitSec := p2 + 0
-        else if (p1 = "tid")
-            NextTaskId := p2 + 0
-        else if (p1 = "task")
-            Tasks.Push({list: p2, status: p3, carry: p4 + 0, born: p5
-                      , due: p6, text: p7, asked: 0, notes: {}
-                      , id: (p0 >= 8) ? p8 + 0 : 0, doneOn: (p0 >= 9) ? p9 : ""
-                      , since: (p0 >= 10) ? p10 : ""})
-        else if (p1 = "tnote")
-            notes.Push({id: p2 + 0, day: p3, text: p4})
-        else if (p1 = "past")
-            Past.Push({day: p2, id: p3 + 0, list: p4, status: p5, carry: p6 + 0
-                     , note: p7, text: p8})
-        else if (p1 = "ptime")
-            PastTime[p2] := StrReplace(p3, "\n", "`n")
-        else if (p1 = "habit") {
-            days := []
-            Loop, Parse, p6, `,
-                if (A_LoopField != "")
-                    days.Push(A_LoopField)
-            Habits.Push({text: p7, born: p2, streak: p3 + 0, best: p4 + 0
-                       , total: p5 + 0, done: days, rest: [], kind: "D", n: 1})
+        p := StrSplit(A_LoopField, "`t")
+        f := (n) => StateField(p, n)
+        switch p[1], true {
+            case "daybook-state":
+                ver := StateNum(f(2))
+            case "day":
+                CurDay := f(2)
+            case "sit":
+                SitSec := StateNum(f(2))
+            case "tid":
+                NextTaskId := StateNum(f(2))
+            case "task":
+                Tasks.Push(Rec({list: f(2), status: f(3), carry: StateNum(f(4)), born: f(5)
+                          , due: f(6), text: f(7), asked: 0, notes: DayMap()
+                          , id: StateNum(f(8)), doneOn: f(9), since: f(10)}))
+            case "tnote":
+                notes.Push({id: StateNum(f(2)), day: f(3), text: f(4)})
+            case "past":
+                Past.Push(Rec({day: f(2), id: StateNum(f(3)), list: f(4), status: f(5), carry: StateNum(f(6))
+                         , note: f(7), text: f(8)}))
+            case "ptime":
+                PastTime[f(2)] := StrReplace(f(3), "\n", "`n")
+            case "habit":
+                days := []
+                loop parse f(6), ","
+                    if (A_LoopField != "")
+                        days.Push(A_LoopField)
+                Habits.Push(Rec({text: f(7), born: f(2), streak: StateNum(f(3)), best: StateNum(f(4))
+                           , total: StateNum(f(5)), done: days, rest: [], kind: "D", n: 1, unit: "W"}))
+            case "hrule":
+                if !Habits.Length               ; belongs to the habit above
+                    continue
+                h := Habits[Habits.Length]
+                h.kind := (f(2) = "W") ? "W" : "D", h.n := (StateNum(f(3)) >= 1) ? StateNum(f(3)) : 1
+                h.unit := (f(5) = "D") ? "D" : "W"      ; weeks, unless it said days
+                loop parse f(4), ","
+                    if (A_LoopField != "")
+                        h.rest.Push(A_LoopField)
+            case "app":
+                AppSec[f(2)] := StateNum(f(3))
+            case "hour":
+                HourSec[f(2)] := StateNum(f(3))
         }
-        else if (p1 = "hrule" && Habits.Length()) {   ; belongs to the habit above
-            h := Habits[Habits.Length()]
-            h.kind := (p2 = "W") ? "W" : "D", h.n := (p3 + 0 >= 1) ? p3 + 0 : 1
-            h.unit := (p0 >= 5 && p5 = "D") ? "D" : "W"      ; weeks, unless it said days
-            Loop, Parse, p4, `,
-                if (A_LoopField != "")
-                    h.rest.Push(A_LoopField)
-        }
-        else if (p1 = "app")
-            AppSec[p2] := p3 + 0
-        else if (p1 = "hour")
-            HourSec[p2] := p3 + 0
     }
     ; A file from before ids has none, and a hand-edited one might have a
     ; counter behind its own tasks. Either way: every task gets one, and the
     ; next one handed out is past all of them.
-    for _, t in Tasks
+    for t in Tasks
         if (t.id >= NextTaskId)
             NextTaskId := t.id + 1
-    for _, t in Tasks
+    for t in Tasks
         if (!t.id)
             t.id := NextTaskId++
     ; notes last, once every task is in and has its id
-    for _, n in notes
+    for n in notes
         if (i := TaskIndex(n.id))
             Tasks[i].notes[n.day] := n.text
     ; Before MISSED, a task left open stayed on Today's list with its carry
@@ -316,84 +356,75 @@ LoadState() {
     ; move to MISSED once, as if they had always been there, waiting since the
     ; day they were added - the day they were meant for.
     if (ver < 3)
-        for _, t in Tasks
+        for t in Tasks
             if (t.list = "T" && t.status = "open" && t.carry > 0)
-                t.list := "M", t.since := (t.born != "" && t.born < CurDay) ? t.born
+                t.list := "M", t.since := (t.born != "" && StrCompare(t.born, CurDay) < 0) ? t.born
                                          : DayShift(CurDay, -1)
     ; and one saved half way through the change still has a day to answer for
-    for _, t in Tasks
+    for t in Tasks
         if (t.list = "M" && t.since = "")
             t.since := DayShift(CurDay, -1)
     ; A long term task cannot have failed at anything, but one moved there from
     ; MISSED used to keep its xN. Cleared here, on the way in - every load, but
     ; after the first one there is nothing left to clear (nothing adds to a
     ; long term task's count any more).
-    for _, t in Tasks
+    for t in Tasks
         if (t.list = "L" && t.carry)
             t.carry := 0
 }
 
 ; The panel's own state lives under [Saved], below the settings. It used to be
 ; under [Panel], before the file held settings too. Whatever is still there -
-; an older file, or the old version of this script writing its state on the way
-; out of a reload - is moved across once and the old section removed.
+; an older file - is moved across once and the old section removed.
 LoadIni() {
+    global PanelX, PanelY, OpenToday, OpenMissed, OpenLong, OpenShort, OpenStats
+    global OpenHabits, PanelLocked, PanelOnTop, PanelMode
     old := CfgSection(IniFile, "Panel")
-    for k, v in old {
-        if k in X,Y,OpenToday,OpenLater,OpenLong,OpenShort,OpenStats,OpenHabits,PanelMode,Locked,OnTop,ClickThru
-            IniWrite, %v%, %IniFile%, Saved, %k%
-    }
-    if (old.Count())
-        IniDelete, %IniFile%, Panel
-    IniRead, PanelX,    %IniFile%, Saved, X,         NONE
-    IniRead, PanelY,    %IniFile%, Saved, Y,         NONE
-    IniRead, OpenToday, %IniFile%, Saved, OpenToday, 1
-    IniRead, OpenMissed, %IniFile%, Saved, OpenMissed, 1
+    for k, v in old
+        if RegExMatch(k, "i)^(X|Y|OpenToday|OpenLater|OpenLong|OpenShort|OpenStats|OpenHabits|PanelMode|Locked|OnTop|ClickThru)$")
+            try IniWrite(v, IniFile, "Saved", k)
+    if (old.Count)
+        try IniDelete(IniFile, "Panel")
+    sv := (key, def) => CfgStr(IniFile, "Saved", key, def)
+    on := (key, def) => (CfgNum(IniFile, "Saved", key, def) ? 1 : 0)
+    PanelX      := sv("X", "")
+    PanelY      := sv("Y", "")
+    OpenToday   := on("OpenToday", 1)
+    OpenMissed  := on("OpenMissed", 1)
     ; LATER TASKS became LONG TERM TASKS. An .ini written before that still says
     ; OpenLater, so the old key answers when the new one is not there - the same
     ; way ClickThru answers for PanelMode below.
-    IniRead, OpenLong, %IniFile%, Saved, OpenLong, NONE
-    if (OpenLong = "NONE" || OpenLong = "ERROR")
-        IniRead, OpenLong, %IniFile%, Saved, OpenLater, 0
-    IniRead, OpenShort, %IniFile%, Saved, OpenShort, 1
-    IniRead, OpenStats, %IniFile%, Saved, OpenStats, 0
-    IniRead, OpenHabits, %IniFile%, Saved, OpenHabits, 1
-    IniRead, PanelLocked, %IniFile%, Saved, Locked, 0
-    IniRead, PanelOnTop, %IniFile%, Saved, OnTop, 1
+    OpenLong    := on("OpenLong", on("OpenLater", 0))
+    OpenShort   := on("OpenShort", 1)
+    OpenStats   := on("OpenStats", 0)
+    OpenHabits  := on("OpenHabits", 1)
+    PanelLocked := on("Locked", 0)
+    PanelOnTop  := on("OnTop", 1)
     ; PanelMode replaced the old two-state ClickThru flag. When the new key is
     ; missing the old one is read instead, so an existing Daybook.ini comes back
     ; in the mode it was left in: ClickThru 1 was today's GHOST, 0 today's DIM.
-    IniRead, PanelMode, %IniFile%, Saved, PanelMode, NONE
-    if (PanelMode = "NONE" || PanelMode = "ERROR") {
-        IniRead, wasThru, %IniFile%, Saved, ClickThru, 0
-        PanelMode := wasThru ? 2 : 1
-    }
+    PanelMode := CfgNum(IniFile, "Saved", "PanelMode", on("ClickThru", 0) ? 2 : 1)
     if (PanelMode != 0 && PanelMode != 1 && PanelMode != 2)
         PanelMode := 1
-    if (PanelX = "NONE" || PanelX = "ERROR")
+    if !IsNumber(PanelX)
         PanelX := A_ScreenWidth - PanelW - 24
-    if (PanelY = "NONE" || PanelY = "ERROR")
+    if !IsNumber(PanelY)
         PanelY := 80
+    PanelX := Integer(PanelX), PanelY := Integer(PanelY)
 }
 
 SaveIni() {
     global PanelX, PanelY
-    if (PanelVisible) {
-        WinGet, mm, MinMax, ahk_id %PanelHwnd%
-        WinGetPos, x, y, , , ahk_id %PanelHwnd%
-        if (x != "" && mm != -1)             ; minimised, it is at -32000
-            PanelX := x, PanelY := y
+    if (PanelVisible && PanelHwnd) {
+        try {
+            if (WinGetMinMax(PanelHwnd) != -1) {         ; minimised, it is at -32000
+                WinGetPos(&x, &y, , , PanelHwnd)
+                PanelX := x, PanelY := y
+            }
+        }
     }
-    IniWrite, %PanelX%,    %IniFile%, Saved, X
-    IniWrite, %PanelY%,    %IniFile%, Saved, Y
-    IniWrite, %OpenToday%, %IniFile%, Saved, OpenToday
-    IniWrite, %OpenMissed%, %IniFile%, Saved, OpenMissed
-    IniWrite, %OpenShort%, %IniFile%, Saved, OpenShort
-    IniWrite, %OpenLong%,  %IniFile%, Saved, OpenLong
-    IniWrite, %OpenStats%, %IniFile%, Saved, OpenStats
-    IniWrite, %OpenHabits%, %IniFile%, Saved, OpenHabits
-    IniWrite, %PanelMode%,   %IniFile%, Saved, PanelMode
-    IniWrite, %PanelLocked%, %IniFile%, Saved, Locked
-    IniWrite, %PanelOnTop%,  %IniFile%, Saved, OnTop
+    for k, v in Map("X", PanelX, "Y", PanelY, "OpenToday", OpenToday, "OpenMissed", OpenMissed
+            , "OpenShort", OpenShort, "OpenLong", OpenLong, "OpenStats", OpenStats
+            , "OpenHabits", OpenHabits, "PanelMode", PanelMode, "Locked", PanelLocked, "OnTop", PanelOnTop)
+        try IniWrite(v, IniFile, "Saved", k)
 }
-

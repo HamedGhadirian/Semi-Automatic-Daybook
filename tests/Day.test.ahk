@@ -1,111 +1,34 @@
 ; Day.test.ahk - a whole day in Obsidian: the note, the board, the close
 ;
-; Loads the real lib\Day.ahk, Journal.ahk, Board.ahk, Tasks.ahk, Habits.ahk and
-; Log.ahk, and writes real notes into tests\journal\day\. The panel is stubbed;
-; SaveState does what the real one does for Obsidian and nothing else. Runs on
-; the real calendar - yesterday is the day being lived, today the one it rolls
-; into - so it is the real RollIfNeeded() that closes it.
-;
-; Run it with run-tests.ps1 in this folder, or on its own.
-#NoEnv
-#SingleInstance off
-SetBatchLines -1
+; Writes real notes into tests\journal\day\. There is no panel (see
+; Harness.ahk); SaveState does what it always does. Runs on the real calendar -
+; yesterday is the day being lived, today the one it rolls into - so it is the
+; real RollIfNeeded() that closes it.
+#Requires AutoHotkey v2.0
+#Include %A_LineFile%\..\Harness.ahk
 
-global DayStartHour := 3, HabitKeep := 372, HabitDays := 7, PastKeepDays := 42
-global RollupOn := 1
-global JournalOn := 1, BoardOn := 1, JournalDir := A_ScriptDir "\journal\day"
-global Tasks := [], Habits := [], Past := [], PastTime := {}, NoteFor := ""
-global CurDay := "", NextTaskId := 1
-global AppSec := {}, HourSec := {}, LogApps := 1, SampleMs := 30000, StatsTop := 8
-global SitSec := 0, AwaySec := 0, CutShort := 0
-global PendMarkKind := "", PendMarkTask := 0
-global CGreen := "0", CAmber := "0", CRed := "0", CTrack := "0", CDim := "0", CToday := "0"
-global Fails := 0, Log := ""
-global StateFile := A_ScriptDir "\journal\day-state.txt"   ; backups\notes goes beside it
+JournalOn := true, BoardOn := true, RollupOn := true
+JournalDir := A_ScriptDir "\journal\day"
+StateFile := A_ScriptDir "\journal\day-state.txt"   ; backups\notes goes beside it
+try DirDelete(A_ScriptDir "\journal", true)
+DirCreate(JournalDir)
 
-SaveState() {
-    BoardWrite()
-    DayNoteWrite(CurDay)
-}
-Refresh() {
-}
-CommitMark() {
-}
-CancelMark(kind, i) {
-    return false
-}
-PendMark(kind, i, status) {
-}
-Present() {
-    return true
-}
-; the note box: remembered, so a test can say what it was asked
-global Asked := ""
-ShowNote(header, rowY := 0, prefill := "", hint := "") {
-    global Asked
-    Asked := header
-}
-OpenNote(i, mode, rowY := 0) {
-    global Asked
-    Asked := "note " mode
-}
-; the journal window's surroundings - only its file parts are tested here
-global NoteBusy := 0
-LivePanel(ByRef x, ByRef y, ByRef w, ByRef h) {
-}
-ClampWin(ByRef x, ByRef y, w, h) {
-}
-TaskbarId(hwnd, id) {
-}
-SideOnTop(gui) {
-}
-SetupDark(hwnd) {
-}
-ShapeWindow(hwnd, round) {
-}
-
-#Include %A_ScriptDir%\..\lib\Day.ahk
-#Include %A_ScriptDir%\..\lib\Journal.ahk
-#Include %A_ScriptDir%\..\lib\Board.ahk
-#Include %A_ScriptDir%\..\lib\Tasks.ahk
-#Include %A_ScriptDir%\..\lib\Habits.ahk
-#Include %A_ScriptDir%\..\lib\Log.ahk
-#Include %A_ScriptDir%\..\lib\Rollup.ahk
-#Include %A_ScriptDir%\..\lib\CalGrid.ahk
-
-Ok(name, got, want) {
-    global Fails, Log
-    if (got . "" = want . "")
-        Log .= "  ok   " name "`n"
-    else
-        Log .= "  FAIL " name ": got [" got "] want [" want "]`n", Fails += 1
-}
-Has(name, hay, needle) {
-    Ok(name, InStr(hay, needle, true) ? 1 : 0, 1)
-}
-Hasnt(name, hay, needle) {
-    Ok(name, InStr(hay, needle, true) ? 1 : 0, 0)
-}
-Count(hay, needle) {
-    StrReplace(hay, needle, needle, n)
-    return n
-}
 ; What SaveNote does with Enter, without the box.
-SaveNote_(id, day, txt) {
-    TaskSetNote(id, day, txt)
-}
+SaveNote_(id, day, txt) => TaskSetNote(id, day, txt)
 Note(day) {
-    FileRead, s, % "*P65001 " JournalFile(day)
-    return s
+    try return FileRead(JournalFile(day), "UTF-8")
+    return ""
 }
 Put(day, s) {
     f := JournalFile(day)
-    FileDelete, %f%
-    FileAppend, %s%, *%f%, UTF-8
+    try FileDelete(f)
+    FileAppend(s, f, "UTF-8")
+}
+Board() {
+    try return FileRead(JournalDir "\Daybook.md", "UTF-8")
+    return ""
 }
 
-FileRemoveDir, %JournalDir%, 1
-FileCreateDir, %JournalDir%
 today := LogicalDay()
 yday  := DayShift(today, -1)
 d2    := DayShift(today, -2)
@@ -125,7 +48,8 @@ SetStatus(1, "done")
 TaskSetNote(Tasks[1].id, yday, "got the oat one")
 SetStatus(3, "failed")
 SetStatus(4, "done")
-AppSec := {"ck3": 3600}, HourSec := {"14|ck3": 3600}   ; rides along with the next change
+AppSec := DayMap(), AppSec["ck3"] := 3600              ; rides along with the next change
+HourSec := DayMap(), HourSec["14|ck3"] := 3600
 HabitSetDay(1, yday)
 f := Note(yday)
 Has("note: made with its heading",   f, "# " yday "`n`n## journal`n")
@@ -162,10 +86,10 @@ Has("time rides along with a real change", f, "active 2h 0m")
 ; ---- the day closes -----------------------------------------------------------
 RollIfNeeded()
 Ok("rolled to today",                CurDay, today)
-Ok("only the unfinished stay",       Tasks.Length(), 1)
+Ok("only the unfinished stay",       Tasks.Length, 1)
 Ok("and it is the open one",         Tasks[1].text, "call mom")
 Ok("carried",                        Tasks[1].carry, 1)
-Ok("the day is kept",                Past.Length(), 4)
+Ok("the day is kept",                Past.Length, 4)
 Ok("the open one is missed",         Tasks[1].list, "M")
 Ok("  since the day it was meant for", Tasks[1].since, yday)
 mom := Tasks[1].id
@@ -179,14 +103,12 @@ Hasnt("today: a missed task is not on today's list", t, "call mom")
 Hasnt("today: not yesterday's done", t, "buy milk")
 
 ; ---- the board shows it waiting ----------------------------------------------
-b := ""
-FileRead, b, % "*P65001 " JournalDir "\Daybook.md"
-Has("board: missed, and since when", b, "## missed`n`n- " box " call mom  " dot " missed yesterday  " dot " " Chr(0xD7) "1`n")
+Has("board: missed, and since when", Board(), "## missed`n`n- " box " call mom  " dot " missed yesterday  " dot " " Chr(0xD7) "1`n")
 
 ; ---- back onto Today: one question, and the answer goes onto yday -----------
 MissToToday(1)
 Ok("back on today",                  Tasks[1].list, "T")
-Has("  asked why, about yesterday",  Asked, "not done yesterday - why?")
+Has("  asked why, about yesterday",  NoteAsked, "not done yesterday - why?")
 Ok("  it is still carried",          Tasks[1].carry, 1)
 SaveNote_(mom, yday, "ran out of time")
 f := Note(yday)
@@ -201,8 +123,7 @@ TaskSetNote(Tasks[1].id, today, "")
 Hasnt("today: note taken away",      Note(today), "ring after six")
 
 ; ---- the board ---------------------------------------------------------------
-b := ""
-FileRead, b, % "*P65001 " JournalDir "\Daybook.md"
+b := Board()
 Has("board: today",                  b, "## today`n`n- " box " call mom  " dot " carried")
 Has("board: long term, empty",       b, "## long term`n`nnothing here`n")
 Has("board: streaks",                b, "| painting | ")
@@ -224,11 +145,11 @@ Has("late tick in yesterday's note", Note(yday), "- " tick " exercise  " dot " 2
 Has("and the count with it",         Note(yday), "2 of 2 done")
 
 ; ---- journal off: nothing is written -----------------------------------------
-JournalOn := 0
+JournalOn := false
 before := Note(today)
 AddTask("while off")
 Ok("journal off: today's note unchanged", Note(today) == before ? 1 : 0, 1)
-JournalOn := 1
+JournalOn := true
 
 ; ---- a note read short is never written back --------------------------------
 cut := "# " yday "`n`n## my notes`n`nhalf a thought`n`n%% daybook: written by Daybook and rewr"
@@ -246,24 +167,24 @@ i := TaskIndex(mom), Tasks[i].list := "M", Tasks[i].since := yday
 MissDone(mom, yday)
 Ok("done on yday: off the panel",    TaskIndex(mom), 0)
 Has("  and ticked in yday's note",   Note(yday), "- " tick " call mom")
-Has("  the box asks about that day", Asked, "done yesterday")
+Has("  the box asks about that day", NoteAsked, "done yesterday")
 SaveNote_(mom, yday, "did it after all")
 Has("  its note lands there",        Note(yday), "- " tick " call mom  " dash " did it after all`n")
 
 ; ---- did it today -------------------------------------------------------------
 CurDay := today
 AddTask("post the letter")
-k := Tasks.Length(), lid := Tasks[k].id
+k := Tasks.Length, lid := Tasks[k].id
 Tasks[k].list := "M", Tasks[k].since := yday, Tasks[k].carry := 1
 MissDone(lid, today)
 Ok("done today: on Today's list, ticked", Tasks[k].list " " Tasks[k].status, "T done")
-Ok("  the usual note box",           Asked, "note done")
+Ok("  the usual note box",           NoteAsked, "anything worth remembering?  (optional)")
 
 ; ---- dropped: Esc keeps it, Enter drops it with its reason ------------------
 AddTask("paint the fence")
-k := Tasks.Length(), fid := Tasks[k].id
+k := Tasks.Length, fid := Tasks[k].id
 Tasks[k].list := "M", Tasks[k].since := yday, Tasks[k].carry := 1
-Past.Push({day: yday, id: fid, list: "T", status: "open", carry: 0, note: "", text: "paint the fence"})
+Past.Push(Rec({day: yday, id: fid, list: "T", status: "open", carry: 0, note: "", text: "paint the fence"}))
 MissDropAsk(k)
 Ok("drop asks first",                NoteFor.drop ? 1 : 0, 1)
 NoteFor := ""                        ; Esc
@@ -274,7 +195,7 @@ Has("  crossed on the day it was meant for, with why", Note(yday), "- " cross " 
 
 ; ---- a missed task waits, and its count goes up with the days --------------
 AddTask("sort the photos")
-k := Tasks.Length(), pid := Tasks[k].id
+k := Tasks.Length, pid := Tasks[k].id
 CurDay := d2                         ; pretend today's list was two days ago
 RollIfNeeded()
 i := TaskIndex(pid)
@@ -283,14 +204,14 @@ Ok("  since the day it was on",      Tasks[i].since, d2)
 
 ; ---- short term: a deadline, and a miss only once it has gone ----------------
 AddTask("book the dentist", "S", "open", DayShift(today, 3))
-sa := Tasks[Tasks.Length()].id
+sa := Tasks[Tasks.Length].id
 AddTask("renew the card", "S", "open", d2)
-sb := Tasks[Tasks.Length()].id
+sb := Tasks[Tasks.Length].id
 AddTask("send the form", "S", "open", DayShift(today, 1))
-sc := Tasks[Tasks.Length()].id
+sc := Tasks[Tasks.Length].id
 ; no deadline: an empty day would sort FIRST as plain text - it has to go last
 AddTask("tidy the desk", "S", "open", "")
-sn := Tasks[Tasks.Length()].id
+sn := Tasks[Tasks.Length].id
 Ok("short: it keeps its deadline",   Tasks[TaskIndex(sa)].due, DayShift(today, 3))
 Ok("short: a task of another list has none", Tasks[TaskIndex(pid)].due, "")
 Ok("short: tag, days left",           DueTag(DayShift(today, 3)), "3d")
@@ -337,6 +258,11 @@ Ok("a deadline given later",          Tasks[TaskIndex(sn)].due, DayShift(today, 
 TaskSetDue(sn, "")
 Ok("and taken away again",            Tasks[TaskIndex(sn)].list " [" Tasks[TaskIndex(sn)].due "]", "S []")
 
+; ---- a place in the list that is not there is nothing, not an error ---------
+Ok("no such task",                    TaskAt(999) "|" TaskAt(0) "|" TaskAt(""), "||")
+RenameTask(999, "x"), SetStatus(999, "done"), DeleteTask(999), TaskMoveTo(999, "L")
+Ok("  and the lists are as they were", TaskIndex(sa) ? 1 : 0, 1)
+
 ; ---- the calendar's dates, years ahead (CalGrid.ahk) --------------------------
 ; The deadline calendar must still be right in five or ten years: months
 ; across the turn of a year, leap years, and the Monday each month starts on.
@@ -349,9 +275,9 @@ Ok("month: 1999 to 2000",           CalMonthShift("1999-12", 1), "2000-01")
 ; before the 1st, less than a week before it - and each month is reached by
 ; stepping one at a time, as the arrow does
 bad := "", m := SubStr(today, 1, 7)
-Loop 300 {
+loop 300 {
     st := CalGridStart(m)
-    FormatTime, wd, % StrReplace(st, "-") "000000", WDay      ; 2 is Monday
+    wd := FormatTime(StrReplace(st, "-") "000000", "WDay")      ; 2 is Monday
     gapDays := DayNum(m "-01") - DayNum(st)
     if (wd != 2 || gapDays < 0 || gapDays > 6)
         bad .= m " "
@@ -366,16 +292,16 @@ Ok("tag: months",                   DueTag(DayShift(today, 150)), "5mo")
 Ok("tag: years",                    DueTag(DayShift(today, 3650)), "10y")
 
 ; ---- old days are let go -----------------------------------------------------
-Past.Push({day: DayShift(today, -60), id: 99, list: "T", status: "done", carry: 0, note: "", text: "long ago"})
+Past.Push(Rec({day: DayShift(today, -60), id: 99, list: "T", status: "done", carry: 0, note: "", text: "long ago"}))
 PastTime[DayShift(today, -60)] := "x"
 PastPrune()
 gone := 1
-for _, r in Past
+for r in Past
     if (r.id = 99)
         gone := 0
 Ok("pruned: the record",   gone, 1)
-Ok("pruned: its time",     PastTime.HasKey(DayShift(today, -60)) ? 0 : 1, 1)
-Ok("kept: yesterday",      PastTime.HasKey(yday) ? 1 : 0, 1)
+Ok("pruned: its time",     PastTime.Has(DayShift(today, -60)) ? 0 : 1, 1)
+Ok("kept: yesterday",      PastTime.Has(yday) ? 1 : 0, 1)
 
 ;================================================================================
 ; The journal window's reading and writing (no window - its parts)
@@ -388,7 +314,7 @@ old := "# " j1 "`n`n## my notes`n`nhello`n- a`n`n" blk
 Put(j1, old)
 r := JrnRead(j1)
 Ok("journal: old heading read",      r.body, "hello`n- a")
-Ok("journal: the head ends at it",   SubStr(r.head, -10), "## my notes")
+Ok("journal: the head ends at it",   SubStr(r.head, -11), "## my notes")
 Ok("journal: unchanged goes back as it was", JrnCompose(r, j1, r.body) == old ? 1 : 0, 1)
 Put(j1, JrnCompose(r, j1, "hello`n- a`n- b"))
 f := Note(j1)
@@ -429,47 +355,45 @@ Ok("name: the plain one is gone",    FileExist(JournalDir "\" t1 ".md") ? 1 : 0,
 Ok("name: title read back",          JournalTitleOf(JournalFile(t1)), "world cup")
 Ok("name: the words came along",     JrnRead(t1).body, "mine")
 Ok("name: case only",                JournalRetitle(t1, "World Cup"), JournalDir "\" t1 " World Cup.md")
+Ok("name: case only, on disk too",   JournalFile(t1) == JournalDir "\" t1 " World Cup.md" ? 1 : 0, 1)
 Ok("name: title taken away",         JournalRetitle(t1, ""), JournalDir "\" t1 ".md")
 Ok("name: clean",                    JournalCleanTitle(t1 " a/b: c?.. "), "a b c")
 Ok("name: clean of link breakers",   JournalCleanTitle("C# [draft] ^x"), "C draft x")
+Ok("name: clean of quotes",          JournalCleanTitle("a `"quoted`" title"), "a quoted title")
 
 ; an old note's first line is its title: it follows the rename
-FileDelete, % JournalDir "\" t1 ".md"
+FileDelete(JournalDir "\" t1 ".md")
 hf := JournalDir "\" t1 " old title.md"
-FileAppend, % "# old title`r`n`r`ntext`r`n", *%hf%, UTF-8
+FileAppend("# old title`r`n`r`ntext`r`n", hf, "UTF-8")
 g := JournalRetitle(t1, "new title")
-FileRead, s, *P65001 %g%
-Ok("name: the first line follows",   s, "# new title`r`n`r`ntext`r`n")
+Ok("name: the first line follows",   FileRead(g, "UTF-8"), "# new title`r`n`r`ntext`r`n")
 g := JournalRetitle(t1, "")
-FileRead, s, *P65001 %g%
-Ok("name: no title, the date",       s, "# " t1 "`r`n`r`ntext`r`n")
+Ok("name: no title, the date",       FileRead(g, "UTF-8"), "# " t1 "`r`n`r`ntext`r`n")
 ; Daybook's own first line is the date, and stays
 JournalRetitle(t1, "again")
-FileRead, s, % "*P65001 " JournalFile(t1)
-Ok("name: a date first line stays",  SubStr(s, 1, 12), "# " t1)
-FileDelete, % JournalFile(t1)
+Ok("name: a date first line stays",  SubStr(FileRead(JournalFile(t1), "UTF-8"), 1, 12), "# " t1)
+FileDelete(JournalFile(t1))
 
 ; a month folder, the roll-up's: still found
-FileCreateDir, % JournalDir "\" SubStr(t2, 1, 4) "\" SubStr(t2, 1, 7) " Month"
+DirCreate(JournalDir "\" SubStr(t2, 1, 4) "\" SubStr(t2, 1, 7) " Month")
 mf := JournalDir "\" SubStr(t2, 1, 4) "\" SubStr(t2, 1, 7) " Month\" t2 " filed.md"
-FileAppend, x, *%mf%, UTF-8
+FileAppend("x", mf, "UTF-8")
 Ok("name: found in its month folder", JournalFile(t2), mf)
 
 ; Daybook made a plain note, then a titled one turned up: folded into one
 Put(t3, "# " t3 "`n`n## journal`n`n`n" blk)
 tf := JournalDir "\" t3 " dream.md"
-FileAppend, % "# dream`n`nI dreamt`n", *%tf%, UTF-8
+FileAppend("# dream`n`nI dreamt`n", tf, "UTF-8")
 Ok("fold: a read finds the titled one", JournalFile(t3), tf)
 Ok("fold: a read moves nothing",       FileExist(JournalDir "\" t3 ".md") ? 1 : 0, 1)
 Ok("fold: a writer folds",             JournalFile(t3, true), tf)
 Ok("fold: the plain one moved away",   FileExist(JournalDir "\" t3 ".md") ? 1 : 0, 0)
-FileRead, s, *P65001 %tf%
-Has("fold: block came over",           s, "I dreamt`n`n%% daybook:")
+Has("fold: block came over",           FileRead(tf, "UTF-8"), "I dreamt`n`n%% daybook:")
 Ok("fold: kept in backups",            FileExist(A_ScriptDir "\journal\backups\notes\folded\" t3 "-*.md") ? 1 : 0, 1)
 
 ; both have words: neither touched, and the day is named
 pf := JournalDir "\" t3 ".md"
-FileAppend, % "# " t3 "`n`n## journal`n`nmine too`n", *%pf%, UTF-8
+FileAppend("# " t3 "`n`n## journal`n`nmine too`n", pf, "UTF-8")
 JournalTwins := ""
 Ok("twins: the plain one is used",     JournalFile(t3), pf)
 Ok("twins: the day is named",          JournalTwins, t3)
@@ -501,76 +425,82 @@ Put(rd, "# " rd "`n`n## journal`n`nsome words here`n`n" DayMarkStart() "`n## the
     . "       13  " Chr(0x2588) " Claude`n" DayMarkEnd() "`n")
 r := RollDay(rd)
 Ok("roll: your words counted",       r.words, 3)
-Ok("roll: three tasks",              r.tasks.Length(), 3)
+Ok("roll: three tasks",              r.tasks.Length, 3)
 Ok("roll: a done one, its note",     r.tasks[1].status "|" r.tasks[1].text "|" r.tasks[1].note, "done|buy milk|got the oat one")
 Ok("roll: carried is not the name",  r.tasks[3].text "|" r.tasks[3].status, "fix bike|open")
 Ok("roll: dropped",                  r.tasks[2].status, "failed")
 Ok("roll: active time",              r.active, 7500)
 Ok("roll: programs",                 r.apps["Claude"] "|" r.apps["dota2"], "5400|2100")
 s := RollSum([rd, DayShift(rd, 1)])
-Ok("roll: summed",                   s.notes " " s.dataDays " " s.written.Length(), "1 1 1")
+Ok("roll: summed",                   s.notes " " s.dataDays " " s.written.Length, "1 1 1")
 
 ; a month that is over is packed; this one stays loose
-FileRemoveDir, %JournalDir%, 1
-FileCreateDir, %JournalDir%
+DirDelete(JournalDir, true)
+DirCreate(JournalDir)
 old := DayShift(SubStr(today, 1, 7) "-01", -1)          ; last day of last month
 Put(old, "# " old "`n`n## journal`n`nold words`n`n" DayMarkStart() "`n## the day`n" DayMarkEnd() "`n")
 Put(today, "# " today "`n`n## journal`n`n`n" DayMarkStart() "`n## the day`n" DayMarkEnd() "`n")
 mo := SubStr(old, 1, 7)
 RollupRun(true)
 md := JournalDir "\" SubStr(mo, 1, 4) "\" mo " " RollMonthName(mo)
+mn := md "\" mo " " RollMonthName(mo) ".md"
 Ok("pack: last month moved",         FileExist(md "\" old ".md") ? 1 : 0, 1)
 Ok("pack: not left loose",           FileExist(JournalDir "\" old ".md") ? 1 : 0, 0)
 Ok("pack: today stays loose",        FileExist(JournalDir "\" today ".md") ? 1 : 0, 1)
 Ok("pack: still found",              JournalFile(old), md "\" old ".md")
-Ok("pack: the month's note",         FileExist(md "\" mo " " RollMonthName(mo) ".md") ? 1 : 0, 1)
-FileRead, ms, % "*P65001 " md "\" mo " " RollMonthName(mo) ".md"
+Ok("pack: the month's note",         FileExist(mn) ? 1 : 0, 1)
+ms := FileRead(mn, "UTF-8")
 Has("pack: it links the day",        ms, "[[" old "]]")
 Has("pack: questions are yours",     ms, "## journal`n`n- What was this month about?")
 Ok("pack: the year's note",          FileExist(JournalDir "\" SubStr(mo, 1, 4) "\" SubStr(mo, 1, 4) " year.md") ? 1 : 0, 1)
 ; your words in a summary survive it being written again
-FileRead, ms, % "*P65001 " md "\" mo " " RollMonthName(mo) ".md"
-FileDelete, % md "\" mo " " RollMonthName(mo) ".md"
-FileAppend, % StrReplace(ms, "- What was this month about?", "- What was this month about?`nmine"), % "*" md "\" mo " " RollMonthName(mo) ".md", UTF-8
+FileDelete(mn)
+FileAppend(StrReplace(ms, "- What was this month about?", "- What was this month about?`nmine"), mn, "UTF-8")
 RollupRun(true)
-FileRead, ms, % "*P65001 " md "\" mo " " RollMonthName(mo) ".md"
+ms := FileRead(mn, "UTF-8")
 Has("pack: your words kept",         ms, "about?`nmine`n")
 Ok("pack: block once",               Count(ms, "%% daybook:"), 1)
-RollupOn := 0
+RollupOn := false
 
 ;================================================================================
 ; The window: built, never shown
 ;================================================================================
-global CBg := "202020", CCard := "2a2a2a", CText := "ffffff", CMuted := "999999", PanelRound := 0
 w1 := DayShift(today, -300), w2 := DayShift(today, -301)
 long := "a title much longer than eighty characters, typed in Obsidian where nothing cuts it short at all"
 wf := JournalDir "\" w1 " " long ".md"
-FileAppend, % "# " w1 "`n`n## journal`n`nhi`n", *%wf%, UTF-8
+FileAppend("# " w1 "`n`n## journal`n`nhi`n", wf, "UTF-8")
 JrnBuild()
 JrnLoad(w1)
 Ok("window: a long title shown whole", JrnNameBase, long)
 Ok("window: untouched box, no rename", JrnSaveName(), "same")
 Ok("window: the file kept its name",   FileExist(wf) ? 1 : 0, 1)
 JrnLoad(w2)
-GuiControl, JrnEd:, JrnName, % "the big day"
+JrnGui["JrnName"].Value := "the big day"
 Ok("window: a title makes the note",   JrnSaveName(), "saved")
 Ok("window: named",                    FileExist(JournalDir "\" w2 " the big day.md") ? 1 : 0, 1)
-GuiControl, JrnEd:, JrnEdit, % "words here"
+JrnGui["JrnEdit"].Value := "words here"
 Ok("window: words saved",              JrnSave(), "saved")
-FileRead, s, % "*P65001 " JournalDir "\" w2 " the big day.md"
-Has("window: in the titled file",      s, "words here")
+Has("window: in the titled file",      FileRead(JournalDir "\" w2 " the big day.md", "UTF-8"), "words here")
 Ok("window: one file",                 FileExist(JournalDir "\" w2 ".md") ? 1 : 0, 0)
 ; a title that cannot be had keeps you on the day
 ; (the note held open with no sharing - a sync at work - so it cannot move)
 lock := FileOpen(JournalDir "\" w2 " the big day.md", "r -rwd")
-GuiControl, JrnEd:, JrnName, % "renamed"
+JrnGui["JrnName"].Value := "renamed"
 JrnGo(w1)
 Ok("window: rename failed, stays on the day", JrnDay, w2)
 lock.Close()
 Ok("window: then it goes through", JrnSaveName(), "saved")
 JrnGo(w1)
 Ok("window: and on to the next day", JrnDay, w1)
-Gui, JrnEd:Hide
+; written in Obsidian meanwhile: the window says so, and writes nothing
+JrnGui["JrnEdit"].Value := "hi, and more from the window"
+FileDelete(wf), FileAppend("# " w1 "`n`n## journal`n`nhi, and more from Obsidian`n", wf, "UTF-8")
+Ok("window: two editors - asks",       JrnSave(), "asking")
+Has("window: ... and wrote nothing",   FileRead(wf, "UTF-8"), "more from Obsidian")
+JrnKeepMine()
+Has("window: kept mine",               FileRead(wf, "UTF-8"), "more from the window")
+Ok("window: the other one is kept",    FileExist(A_ScriptDir "\journal\backups\journal-conflicts\" w1 "-from-the-note-*.md") ? 1 : 0, 1)
+JrnGui.Hide()
 ; which way a box reads: by its first letter (Persian built from its codes:
 ; this file stays plain ASCII)
 fa := Chr(0x633) Chr(0x644) Chr(0x627) Chr(0x645)          ; salaam
@@ -580,11 +510,4 @@ Ok("direction: a list, Persian with English",   JrnRtl("- " fa " Daybook") ? 1 :
 Ok("direction: digits and marks do not count",  JrnRtl("12) - hello " fa) ? 1 : 0, 0)
 Ok("direction: empty is left to right",         JrnRtl("") ? 1 : 0, 0)
 
-FileDelete, %A_ScriptDir%\results-Day.txt
-FileAppend, % (Fails ? Fails " FAILED`n" : "all passed`n") Log
-    , %A_ScriptDir%\results-Day.txt, UTF-8
-ExitApp
-
-; last: it has a menu label, which would end the auto-execute section above
-#Include %A_ScriptDir%\..\lib\Missed.ahk
-#Include %A_ScriptDir%\..\lib\JournalWin.ahk
+Done()

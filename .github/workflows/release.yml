@@ -1,5 +1,5 @@
-# Push a tag like v0.9.0-beta.1 (matching DaybookVersion in lib\Config.ahk)
-# and this tests the app, builds both zips and publishes them as a release.
+# Push a tag like v1.2.0 (matching DaybookVersion in lib/Config.ahk) and this
+# tests the script, builds both zips and publishes them as a GitHub release.
 name: Release
 
 on:
@@ -15,23 +15,24 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Get AutoHotkey 1.1.37.02
+      - name: Get AutoHotkey 2.0.19
         shell: pwsh
-        # the same exe that runs the tests goes into the portable zip, so what
-        # is shipped is what was tested
+        # from AutoHotkey's own GitHub releases: autohotkey.com turns away
+        # build servers. Its exe and licence go into ahk\, wherever they sit
+        # inside the zip.
         run: |
-          Invoke-WebRequest https://github.com/AutoHotkey/AutoHotkey/releases/download/v1.1.37.02/AutoHotkey_1.1.37.02.zip -OutFile ahk.zip
+          Invoke-WebRequest https://github.com/AutoHotkey/AutoHotkey/releases/download/v2.0.19/AutoHotkey_2.0.19.zip -OutFile ahk.zip
           Expand-Archive ahk.zip -DestinationPath ahk-zip
           New-Item -ItemType Directory ahk | Out-Null
-          foreach ($f in "AutoHotkeyU64.exe", "license.txt") {
+          foreach ($f in "AutoHotkey64.exe", "license.txt") {
             $found = Get-ChildItem ahk-zip -Recurse -Filter $f | Select-Object -First 1
             if (-not $found) { throw "$f is not in the AutoHotkey zip" }
             Copy-Item $found.FullName ahk
           }
 
-      - name: Test (it loads, and the rules hold)
+      - name: Test (syntax and logic)
         shell: pwsh
-        run: .\tests\run-tests.ps1 -Exe .\ahk\AutoHotkeyU64.exe
+        run: .\tests\run-tests.ps1 -Ahk .\ahk\AutoHotkey64.exe
 
       - name: Build
         shell: pwsh
@@ -42,23 +43,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         # notes from CHANGELOG.md (build.ps1); a version with a dash in it -
-        # 0.9.0-beta.1 - is a pre-release, which the "latest" link skips.
+        # 1.2.0-beta.1 - is a pre-release, which the "latest" link skips.
         #
         # Moving a tag that has already been released has to WORK rather than
         # fail halfway: a typo in the notes should not cost a version number.
-        # So publish if it is new, and replace the notes and both zips if it
+        # So publish if it is new, and replace the notes and the files if it
         # is not.
         run: |
           $v = $env:GITHUB_REF_NAME.TrimStart("v")
           $pre = if ($v.Contains("-")) { "--prerelease" } else { "--latest" }
-          $zips = "dist/Daybook-$v-portable.zip", "dist/Daybook-$v.zip"
+          $files = "dist/Daybook-$v-portable.zip", "dist/Daybook-$v.zip", "dist/manifest.json"
           gh release view $env:GITHUB_REF_NAME 2>&1 | Out-Null
           if ($LASTEXITCODE -eq 0) {
             gh release edit $env:GITHUB_REF_NAME --title "Daybook $v" --notes-file dist/notes.md $pre
             if ($LASTEXITCODE) { throw "gh release edit failed" }
-            gh release upload $env:GITHUB_REF_NAME @zips --clobber
+            gh release upload $env:GITHUB_REF_NAME @files --clobber
             if ($LASTEXITCODE) { throw "gh release upload failed" }
           } else {
-            gh release create $env:GITHUB_REF_NAME @zips --title "Daybook $v" --notes-file dist/notes.md $pre
+            gh release create $env:GITHUB_REF_NAME @files --title "Daybook $v" --notes-file dist/notes.md $pre
             if ($LASTEXITCODE) { throw "gh release create failed" }
           }

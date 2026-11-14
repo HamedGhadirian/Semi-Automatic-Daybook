@@ -1,20 +1,22 @@
 ﻿;================================================================================
 ; Timers
 ;================================================================================
-TickFast:
+#Requires AutoHotkey v2.0
+
+TickFast() {
     Breathe()
     HoverCheck()
-Return
+}
 
-TickSecond:
+TickSecond() {
     TickSit()
-Return
+}
 
 ; Counts the time that really passed since the last tick, not one second per
 ; tick: a timer tick is skipped whenever the script is busy (a drag, a menu, a
 ; slow write to the synced folder), and counting ticks made the clock run slow.
 TickSit() {
-    global Away, AwaySec, AwayIdleMs, SitSec, BreakMode, BreakStart
+    global Away, AwaySec, AwayIdleMs, SitSec
     static last := 0, carryMs := 0
     now := A_TickCount
     dt := last ? now - last : 1000
@@ -47,7 +49,7 @@ TickSit() {
     } else {
         Away := 1
         AwaySec += secs
-        gone := SeenMs()                     ; how long you had ACTUALLY been
+        gone := GoneMs()                     ; how long you had ACTUALLY been
         if (gone > AwayIdleMs)               ; gone, not just how long we have
             AwayIdleMs := gone               ; known it
     }
@@ -55,15 +57,16 @@ TickSit() {
     UpdateTimerText()
 }
 
-TickSample:
+TickSample() {
     SampleApp()
-Return
+}
 
-MarkTick:
+MarkTick() {
     CommitMark()
-Return
+}
 
-TickMinute:
+TickMinute() {
+    global StatsShown
     RollIfNeeded()
     ; UpdateStats() only rewrites the text. The drawer, and the window under it,
     ; were sized for the number of apps there were when the drawer was last laid
@@ -72,7 +75,7 @@ TickMinute:
     ; it. Growing the panel needs a relayout, so ask for one whenever the count
     ; has moved. It stops happening once the list reaches StatsTop, which is why
     ; this only ever looked like an early-day bug. Skipped while the panel is
-    ; hidden: Relayout() ends in Gui,Show and would put it back on screen.
+    ; hidden: Relayout() ends in a Show and would put it back on screen.
     ; ShowPanel() relayouts anyway.
     ;
     ; The text is rewritten whether the drawer is open or not. The total sits
@@ -84,5 +87,4 @@ TickMinute:
     else
         UpdateStats()
     SaveState()
-Return
-
+}

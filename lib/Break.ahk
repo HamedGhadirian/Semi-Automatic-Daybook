@@ -1,13 +1,14 @@
 ﻿;================================================================================
-; A break you declared by hand - Win+F1, or the break switch
+; A break you declared by hand - the break key, or the break switch
 ;================================================================================
 ; Ground truth, entered by hand. Pressing it says "I am not at this desk" no
 ; matter what the keyboard, the audio meter or the monitor happen to think.
 ; The sit clock stops while it is on and nothing is logged to any app. Ending it
 ; follows the same rule as walking away (CreditBreak): five minutes or more and
 ; the clock starts clean, less and it carries on from where it was.
+#Requires AutoHotkey v2.0
+
 ToggleBreak() {
-    global BreakMode
     if (BreakMode)
         EndBreak()
     else
@@ -25,7 +26,7 @@ StartBreak() {
 }
 
 EndBreak() {
-    global BreakMode, Away, AwaySec, AwayIdleMs, EdgeState, LastShownMin, BreakStart
+    global BreakMode, Away, AwaySec, AwayIdleMs, EdgeState, LastShownMin
     BreakMode := 0
     Away := 0, AwaySec := 0, AwayIdleMs := 0
     CreditBreak((A_TickCount - BreakStart) // 1000)   ; same rule as walking away
@@ -33,4 +34,3 @@ EndBreak() {
     ApplySitState()
     UpdateTimerText()
 }
-

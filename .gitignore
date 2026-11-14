@@ -4,22 +4,26 @@ Daybook-state.txt
 log/
 backups/
 Daybook-state.unreadable-*.txt
+errors.log
+previous version/
 *.tmp
 
 # What the tests write
 tests/results-*.txt
-tests/Daybook.ini
-tests/Daybook-state.txt
 tests/journal/
+tests/log/
+tests/look-*.png
 
-# A local AutoHotkey, if you drop one in to run it portably
-AutoHotkeyU64.exe
-AutoHotkey.exe
-
-tests/state-test.txt
-
-# What build.ps1 makes, and a downloaded AutoHotkey to build it with
+# What build.ps1 makes, and a local AutoHotkey to run it portably
 dist/
 ahk/
 ahk.zip
 ahk-zip/
+AutoHotkey64.exe
+
+# The script runs as its own <name>.exe, a renamed copy of AutoHotkey the kit
+# makes beside it (lib\Kit\Exe.ahk) - made on each PC, never shared
+/*.exe
+# Your own tray icon, if you put one here (the .ini's [Icons] Tray names it)
+task.png
+task_16x16.png

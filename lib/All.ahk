@@ -1,16 +1,16 @@
 ﻿;================================================================================
 ; All.ahk - every part of Daybook, in the order it loads
 ;================================================================================
-; Daybook.ahk includes this file and nothing else. The order matters for the
-; first three and only the first three: in AutoHotkey v1 a script RUNS from the
-; top until it meets a Return or a key definition, so everything that has to
-; happen at start-up has to come before anything that does not.
+; Daybook.ahk includes the kit and this file. In AutoHotkey v2 every function
+; is known wherever it is written, so the order only matters for the values
+; set at the top of a file: Config and State first, because their globals are
+; what everything else starts from.
 ;
-;   Config     the settings, read from Daybook.ini once - and the colours
+;   Config     the version, the settings and their defaults, the colours, the
+;              two keys, the settings window's rows, the .ini template
 ;   State      every value the script keeps while it runs
-;   Start      builds the windows, starts the timers, then Return
-;   ----------- nothing below here runs on its own -----------------------------
-;   Keys       Win+F6, Win+F1, and the clicks that only leave a timestamp
+;   Start      the start-up, settings changed, the theme changed, leaving
+;   Keys       the clicks that only leave a timestamp, and the panel's wheel
 ;   Timers     the four clocks, and the sit counter they drive
 ;   Presence   is anybody there: the display, the lock screen, sound, input
 ;   Bar        the sit timer as the bar across the top, and the digits
@@ -32,18 +32,15 @@
 ;   Missed     what a day ended without: did it, drop it, or back to today
 ;   CalGrid    the month calendar the habit window and Due both draw
 ;   Due        the calendar that asks a short term task for its deadline
-;   SettingsWin  the settings window
 ;   HabitWin   one habit's window: how often, its calendar, its streak
 ;   JournalWin the journal window - your part of a day note
-;   Tray       the tray icon's menu, and leaving tidily
-;   Ini        the commented Daybook.ini written on the first run
+;   Tray       Daybook's own tray items, and the icon
 ;
-; Last of all, Settings.ahk: the reader that turns Daybook.ini into values, and
-; Taskbar.ahk: Daybook's windows get a taskbar button of their own, not one
-; shared with other AutoHotkey scripts. And SeenAt.ahk: whether the pointer is
-; on the panel you can see, or on a window over it. All three are all functions,
-; so where they go in the list does not matter.
+; The settings window, the tray menu's frame, the keys, Start with Windows,
+; administrator, the theme, updates, the taskbar button and "is the panel
+; really seen here" (WindowSeenAt) are the kit's - lib\Kit\Kit.ahk.
 ;================================================================================
+#Requires AutoHotkey v2.0
 #Include %A_LineFile%\..\Config.ahk
 #Include %A_LineFile%\..\State.ahk
 #Include %A_LineFile%\..\Start.ahk
@@ -69,11 +66,6 @@
 #Include %A_LineFile%\..\Missed.ahk
 #Include %A_LineFile%\..\CalGrid.ahk
 #Include %A_LineFile%\..\Due.ahk
-#Include %A_LineFile%\..\SettingsWin.ahk
 #Include %A_LineFile%\..\HabitWin.ahk
 #Include %A_LineFile%\..\JournalWin.ahk
 #Include %A_LineFile%\..\Tray.ahk
-#Include %A_LineFile%\..\Ini.ahk
-#Include %A_LineFile%\..\Settings.ahk
-#Include %A_LineFile%\..\Taskbar.ahk
-#Include %A_LineFile%\..\SeenAt.ahk

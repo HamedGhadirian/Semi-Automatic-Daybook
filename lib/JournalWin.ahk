@@ -1,4 +1,4 @@
-;================================================================================
+﻿;================================================================================
 ; The journal window - the JOURNAL heading on the panel, or the tray
 ;================================================================================
 ; A window onto YOUR part of a day note: everything under its "## journal"
@@ -23,114 +23,108 @@
 ;
 ; Off ([Journal] Write=0) means off: no heading on the panel, no tray item.
 ;================================================================================
-JrnShow(day := "") {
-    global JournalOn, JrnBuilt, JrnHwnd, JrnW, JrnH, JrnDay
+#Requires AutoHotkey v2.0
+
+JrnShow(day := "", *) {
     if (!JournalOn)
         return
-    if (!JrnBuilt)
+    if (!IsObject(JrnGui))
         JrnBuild()
     if (day = "")
         day := LogicalDay()
     if (DllCall("IsWindowVisible", "ptr", JrnHwnd)) {
         if (day != JrnDay)
             JrnGo(day)
-        WinActivate, ahk_id %JrnHwnd%
+        WinActivate(JrnHwnd)
         return
     }
     JrnLoad(day)
     ; beside the panel, on whichever side has room - where the habit window goes
-    LivePanel(px, py, pw, ph)
+    LivePanel(&px, &py, &pw, &ph)
     x := px - JrnW - 8
     if (x < 10)
         x := px + pw + 8
     y := py
-    ClampWin(x, y, JrnW, JrnH)
-    SideOnTop("JrnEd")
-    Gui, JrnEd:Show, x%x% y%y%, Daybook journal
-    GuiControl, JrnEd:Focus, JrnEdit
-    GuiControlGet, hEd, JrnEd:Hwnd, JrnEdit
-    DllCall("SendMessage", "ptr", hEd, "uint", 0xB1, "ptr", -1, "ptr", -1)   ; caret at the end
-    DllCall("SendMessage", "ptr", hEd, "uint", 0xB7, "ptr", 0, "ptr", 0)    ; and in view
-    SetTimer, JrnWatch, 2000
+    ClampWin(&x, &y, JrnW, JrnH)
+    SideOnTop(JrnGui)
+    JrnGui.Show("x" x " y" y)
+    e := JrnGui["JrnEdit"]
+    e.Focus()
+    SendMessage(0xB1, -1, -1, e)         ; caret at the end
+    SendMessage(0xB7, 0, 0, e)           ; and in view
+    SetTimer(JrnLook, 2000)
 }
 
 JrnBuild() {
-    global
-    local W := 480, L := 20, y, opt
-    Gui, JrnEd:New, +AlwaysOnTop -MaximizeBox -MinimizeBox +LabelJrnEd +HwndJrnHwnd, Daybook journal
-    TaskbarId(JrnHwnd, "Ahk.Daybook")     ; under the panel's taskbar button
-    Gui, JrnEd:Margin, 0, 0
-    Gui, JrnEd:Color, %CBg%, %CCard%
+    global JrnGui, JrnHwnd, JrnW, JrnH
+    W := 480, L := 20
+    g := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox", "Daybook journal")
+    JrnGui := g, JrnHwnd := g.Hwnd
+    KitTaskbar.Id(JrnHwnd)                ; under the panel's taskbar button
+    g.MarginX := 0, g.MarginY := 0
+    g.BackColor := CBg
+    g.OnEvent("Close", JrnEdClose)
+    g.OnEvent("Escape", JrnEdClose)
+    link := (opts, text, fn) => OnClicks(g.Add("Text", opts " BackgroundTrans", text), fn)
 
     ; ---- which day: arrows either side of it, as the habit calendar's month
-    Gui, JrnEd:Font, s10 Norm c%CText%, Segoe UI
-    opt := "vJrnPrev gJrnPrev x" L " y14 w30 h24 +0x200 BackgroundTrans"
-    Gui, JrnEd:Add, Text, %opt%, % Chr(0x25C0)
-    Gui, JrnEd:Font, s11 Bold c%CText%, Segoe UI
-    opt := "vJrnTitle x" (L + 34) " y14 w" (W - 2 * L - 68) " h24 Center +0x200 BackgroundTrans"
-    Gui, JrnEd:Add, Text, %opt%
-    Gui, JrnEd:Font, s10 Norm c%CText%, Segoe UI
-    opt := "vJrnNext gJrnNext x" (W - L - 30) " y14 w30 h24 Right +0x200 BackgroundTrans"
-    Gui, JrnEd:Add, Text, %opt%, % Chr(0x25B6)
+    g.SetFont("s10 Norm c" CText, "Segoe UI")
+    link("vJrnPrev x" L " y14 w30 h24 +0x200", Chr(0x25C0), (*) => JrnGo(DayShift(JrnDay, -1)))
+    g.SetFont("s11 Bold c" CText, "Segoe UI")
+    g.Add("Text", "vJrnTitle x" (L + 34) " y14 w" (W - 2 * L - 68) " h24 Center +0x200 BackgroundTrans")
+    g.SetFont("s10 Norm c" CText, "Segoe UI")
+    link("vJrnNext x" (W - L - 30) " y14 w30 h24 Right +0x200", Chr(0x25B6), JrnNextDay)
     ; "today", or a way back to it
-    Gui, JrnEd:Font, s8 Norm c%CDim%, Segoe UI
-    opt := "vJrnWhen gJrnToday x" (L + 34) " y38 w" (W - 2 * L - 68) " h16 Center BackgroundTrans"
-    Gui, JrnEd:Add, Text, %opt%
+    g.SetFont("s8 Norm c" CDim, "Segoe UI")
+    g.Add("Text", "vJrnWhen x" (L + 34) " y38 w" (W - 2 * L - 68) " h16 Center BackgroundTrans")
+        .OnEvent("Click", (*) => (JrnDay != LogicalDay() ? JrnGo(LogicalDay()) : 0))
 
     ; ---- the day's title: it goes in the file name, after the date
-    Gui, JrnEd:Font, s10 Bold c%CText%, Segoe UI
-    opt := "vJrnName gJrnNamed x" L " y62 w" (W - 2 * L) " h24 -E0x200"
-    Gui, JrnEd:Add, Edit, %opt%
-    GuiControlGet, hNm, JrnEd:Hwnd, JrnName
-    DllCall("SendMessage", "ptr", hNm, "uint", 0xD3, "ptr", 3, "ptr", 8 | (8 << 16))
-    DllCall("SendMessage", "ptr", hNm, "uint", 0x1501, "ptr", 1, "wstr", "a title for the day - optional, it names the file")
+    g.SetFont("s10 Bold c" CText, "Segoe UI")
+    nm := g.Add("Edit", "vJrnName x" L " y62 w" (W - 2 * L) " h24 -E0x200 Background" CCard)
+    nm.OnEvent("Change", (*) => (JrnFitDir(), SetTimer(JrnNameSave, -1500)))
+    SendMessage(0xD3, 3, 8 | (8 << 16), nm)                     ; EM_SETMARGINS
+    SendMessage(0x1501, 1, StrPtr("a title for the day - optional, it names the file"), nm)   ; EM_SETCUEBANNER
 
     ; ---- the writing. WantTab, so Tab indents a list the way Obsidian does.
     ; Enter is the key below, not the box's own: it carries a list on.
     y := 96
-    JrnEdY := y, JrnEdH := 440
-    Gui, JrnEd:Font, s10 Norm c%CText%, Segoe UI
-    opt := "vJrnEdit gJrnTyped x" L " y" y " w" (W - 2 * L) " h" JrnEdH " -E0x200 +Multi +VScroll +WantTab"
-    Gui, JrnEd:Add, Edit, %opt%
-    GuiControlGet, hEd, JrnEd:Hwnd, JrnEdit
-    ; a dark scrollbar, not the white one, and the words off the box's edges -
+    g.SetFont("s10 Norm c" CText, "Segoe UI")
+    e := g.Add("Edit", "vJrnEdit x" L " y" y " w" (W - 2 * L) " h" JrnEdH " -E0x200 +Multi +VScroll +WantTab Background" CCard)
+    e.OnEvent("Change", (*) => (JrnFitDir(), SetTimer(JrnAutoSave, -1500)))
+    ; the scrollbar in the theme's skin, and the words off the box's edges -
     ; EM_SETMARGINS, left and right, 8px each
-    DllCall("uxtheme\SetWindowTheme", "ptr", hEd, "str", "DarkMode_Explorer", "ptr", 0)
-    DllCall("SendMessage", "ptr", hEd, "uint", 0xD3, "ptr", 3, "ptr", 8 | (8 << 16))
+    Theme.Skin(e, "Explorer")
+    SendMessage(0xD3, 3, 8 | (8 << 16), e)
 
     ; ---- the two-editors question, only shown when it is asked - the box
     ; gives up its bottom 60px to it rather than leaving a gap for it always
-    Gui, JrnEd:Font, s8 Norm c%CAmber%, Segoe UI
-    opt := "vJrnMsg x" L " y" (y + JrnEdH - 56) " w" (W - 2 * L) " h30 BackgroundTrans Hidden"
-    Gui, JrnEd:Add, Text, %opt%
-    Gui, JrnEd:Font, s9 Bold c%CGreen%, Segoe UI
-    opt := "vJrnKeep gJrnKeep x" L " y" (y + JrnEdH - 24) " w170 h22 +0x200 BackgroundTrans Hidden"
-    Gui, JrnEd:Add, Text, %opt%, keep what is written here
-    Gui, JrnEd:Font, s9 Bold c%CText%, Segoe UI
-    opt := "vJrnTake gJrnTake x" (L + 190) " y" (y + JrnEdH - 24) " w170 h22 +0x200 BackgroundTrans Hidden"
-    Gui, JrnEd:Add, Text, %opt%, use the note as it is now
+    g.SetFont("s8 Norm c" CAmber, "Segoe UI")
+    g.Add("Text", "vJrnMsg x" L " y" (y + JrnEdH - 56) " w" (W - 2 * L) " h30 BackgroundTrans Hidden")
+    g.SetFont("s9 Bold c" CGreen, "Segoe UI")
+    link("vJrnKeep x" L " y" (y + JrnEdH - 24) " w170 h22 +0x200 Hidden", "keep what is written here", (*) => JrnKeepMine())
+    g.SetFont("s9 Bold c" CText, "Segoe UI")
+    link("vJrnTake x" (L + 190) " y" (y + JrnEdH - 24) " w170 h22 +0x200 Hidden", "use the note as it is now", (*) => JrnTakeFile())
     y += JrnEdH + 6
 
-    Gui, JrnEd:Font, s8 Norm c%CDim%, Segoe UI
-    opt := "x" L " y" y " w" (W - 2 * L - 120) " h16 BackgroundTrans"
-    Gui, JrnEd:Add, Text, %opt%, % "- starts a list, Enter carries it on   " Chr(0x00B7) "   saved as you type"
-    opt := "vJrnStatus x" (W - L - 120) " y" y " w120 h16 Right BackgroundTrans"
-    Gui, JrnEd:Add, Text, %opt%
+    g.SetFont("s8 Norm c" CDim, "Segoe UI")
+    g.Add("Text", "x" L " y" y " w" (W - 2 * L - 120) " h16 BackgroundTrans"
+        , "- starts a list, Enter carries it on   " Chr(0x00B7) "   saved as you type")
+    g.Add("Text", "vJrnStatus x" (W - L - 120) " y" y " w120 h16 Right BackgroundTrans")
     y += 24
 
-    Gui, JrnEd:Font, s9 Norm c%CMuted%, Segoe UI
-    opt := "gJrnOpenFile x" L " y" y " w120 h22 +0x200 BackgroundTrans"
-    Gui, JrnEd:Add, Text, %opt%, open the note
-    Gui, JrnEd:Font, s9 Norm c%CText%, Segoe UI
-    opt := "gJrnEdClose x" (W - L - 60) " y" y " w60 h22 Right +0x200 BackgroundTrans"
-    Gui, JrnEd:Add, Text, %opt%, close
+    g.SetFont("s9 Norm c" CMuted, "Segoe UI")
+    g.Add("Text", "x" L " y" y " w120 h22 +0x200 BackgroundTrans", "open the note")
+        .OnEvent("Click", (*) => JrnOpenFile())
+    g.SetFont("s9 Norm c" CText, "Segoe UI")
+    g.Add("Text", "x" (W - L - 60) " y" y " w60 h22 Right +0x200 BackgroundTrans", "close")
+        .OnEvent("Click", JrnEdClose)
     y += 34
 
-    SetupDark(JrnHwnd)
-    ShapeWindow(JrnHwnd, PanelRound)
-    Gui, JrnEd:Show, Hide w%W% h%y%, Daybook journal
+    Theme.TitleBar(JrnHwnd)
+    ShapeWindow(JrnHwnd)
+    g.Show("Hide w" W " h" y)
     JrnW := W, JrnH := y
-    JrnBuilt := 1
 }
 
 ;================================================================================
@@ -152,8 +146,8 @@ JrnRead(day, fold := false) {
     if (!FileExist(f))
         return r
     r.exists := true
-    FileRead, s, *P65001 %f%
-    if (ErrorLevel) {
+    try s := FileRead(f, "UTF-8")
+    catch {
         r.ok := false
         return r
     }
@@ -167,14 +161,14 @@ JrnRead(day, fold := false) {
         r.short := true
     top := a ? SubStr(t, 1, a - 1) : t
     r.tail := a ? SubStr(t, a) : ""
-    ; `n: AutoHotkey's ^ and $ only see `r`n as a line end unless told, and
-    ; top has had its `r taken out
-    if (p := RegExMatch(top, "im`n)^##[ \t]+(journal|my notes)[ \t]*$", m)) {
-        r.head := SubStr(top, 1, p + StrLen(m) - 1)
-        rest := SubStr(top, p + StrLen(m))
-    } else if (RegExMatch(top, "^#[ \t][^\n]*", m)) {
-        r.head := m
-        rest := SubStr(top, StrLen(m) + 1)
+    ; `n: ^ and $ only see `r`n as a line end unless told, and top has had its
+    ; `r taken out
+    if (p := RegExMatch(top, "im`n)^##[ \t]+(journal|my notes)[ \t]*$", &m)) {
+        r.head := SubStr(top, 1, p + m.Len - 1)
+        rest := SubStr(top, p + m.Len)
+    } else if (RegExMatch(top, "^#[ \t][^\n]*", &m)) {
+        r.head := m[0]
+        rest := SubStr(top, m.Len + 1)
     } else
         rest := top
     r.body := JrnNorm(rest)
@@ -209,24 +203,23 @@ JrnWords(day) {
     r := JrnRead(day)
     if (!r.ok || r.body = "")
         return 0
-    RegExReplace(r.body, "(*UCP)\w+", "", n)
+    RegExReplace(r.body, "(*UCP)\w+", "", &n)
     return n
 }
 
 ; The panel heading's number: today's words, or nothing yet.
 JrnPanelCount() {
-    global JournalOn
     static seen := "", n := 0
-    if (!JournalOn)
+    if (!JournalOn || !IsObject(PanelGui))
         return
     ; every relayout asks - the note is read again only once its name, time or
     ; size says it changed
     f := JournalFile(LogicalDay())
-    FileGetTime, at, %f%
-    FileGetSize, size, %f%
-    if ((f "|" at "|" size) != seen)
-        n := JrnWords(LogicalDay()), seen := f "|" at "|" size
-    GuiControl, Panel:, JrnCnt, % n ? n " words" : ""
+    stamp := "", size := ""
+    try stamp := FileGetTime(f), size := FileGetSize(f)
+    if ((f "|" stamp "|" size) != seen)
+        n := JrnWords(LogicalDay()), seen := f "|" stamp "|" size
+    PanelGui["JrnCnt"].Text := n ? n " words" : ""
 }
 
 ;================================================================================
@@ -241,8 +234,8 @@ JrnLoad(day) {
     JrnNameBase := r.exists ? JournalTitleOf(r.f) : ""
     JrnAsk := 0
     JrnAskShow(false)
-    GuiControl, JrnEd:, JrnEdit, % r.body
-    GuiControl, JrnEd:, JrnName, %JrnNameBase%
+    JrnGui["JrnEdit"].Value := r.body
+    JrnGui["JrnName"].Value := JrnNameBase
     JrnFitDir()
     JrnPaintDay()
     if (!r.ok)
@@ -255,40 +248,36 @@ JrnLoad(day) {
 
 ; The day at the top, and the arrows - forward stops at today.
 JrnPaintDay() {
-    global JrnDay, CText, CDim
     today := LogicalDay()
-    FormatTime, title, % StrReplace(JrnDay, "-") "000000", dddd d MMMM yyyy
-    GuiControl, JrnEd:, JrnTitle, %title%
-    col := (JrnDay < today) ? CText : CDim
-    GuiControl, JrnEd:+c%col%, JrnNext
-    GuiControl, JrnEd:MoveDraw, JrnNext
+    JrnGui["JrnTitle"].Text := DayWords(JrnDay, "dddd d MMMM yyyy")
+    c := JrnGui["JrnNext"]
+    c.SetFont("c" (StrCompare(JrnDay, today) < 0 ? CText : CDim))
+    c.Redraw()
     if (JrnDay = today)
         when := "today"
     else if (JrnDay = DayShift(today, -1))
         when := "yesterday   " Chr(0x00B7) "   back to today"
     else
         when := "back to today"
-    GuiControl, JrnEd:, JrnWhen, %when%
+    JrnGui["JrnWhen"].Text := when
 }
 
 JrnSay(msg, warn := false) {
-    global CDim, CAmber
-    col := warn ? CAmber : CDim
-    GuiControl, JrnEd:+c%col%, JrnStatus
-    GuiControl, JrnEd:, JrnStatus, %msg%
+    c := JrnGui["JrnStatus"]
+    c.SetFont("c" (warn ? CAmber : CDim))
+    c.Text := msg
 }
 
 ; What is in the box, the way the file would have it.
 JrnText() {
-    GuiControlGet, t, JrnEd:, JrnEdit
-    return JrnNorm(t)
+    return JrnNorm(JrnGui["JrnEdit"].Value)
 }
 
 ; Write the box to the note, if it has changed. Returns what happened:
 ; "same" nothing to do, "saved", "busy" Daybook is writing the note (tried
 ; again shortly), "asking" the two-editors question is up, "failed".
-JrnSave() {
-    global JrnDay, JrnBase, JrnAsk, NoteBusy, JrnAskFile
+JrnSave(*) {
+    global JrnBase, JrnAsk, JrnAskFile
     Critical                             ; nothing of ours writes the note mid-save
     if (JrnAsk)
         return "asking"
@@ -296,13 +285,13 @@ JrnSave() {
     if (text == JrnBase)
         return "same"
     if (NoteBusy) {
-        SetTimer, JrnAutoSave, -300
+        SetTimer(JrnAutoSave, -300)
         return "busy"
     }
     r := JrnRead(JrnDay, true)
     if (!r.ok || r.short) {
         JrnSay("could not read the note - trying again", true)
-        SetTimer, JrnAutoSave, -3000
+        SetTimer(JrnAutoSave, -3000)
         return "failed"
     }
     if (r.exists && !(r.body == JrnBase)) {
@@ -315,12 +304,11 @@ JrnSave() {
         DayNoteKeep(JrnDay, r.f, r.s)    ; the note as it stood, once a run
     if (!JrnWrite(r.f, JrnCompose(r, JrnDay, text))) {
         JrnSay("could not save - trying again", true)
-        SetTimer, JrnAutoSave, -3000
+        SetTimer(JrnAutoSave, -3000)
         return "failed"
     }
     JrnBase := text
-    FormatTime, hm, , HH:mm
-    JrnSay("saved " hm)
+    JrnSay("saved " FormatTime(, "HH:mm"))
     if (!r.exists && JrnDay = LogicalDay())
         DayNoteWrite(JrnDay, true)       ; a new note for today gets its block now
     if (JrnDay = LogicalDay())
@@ -331,9 +319,9 @@ JrnSave() {
 ; The title box to the file name, if it has changed. A day with no note yet
 ; gets one first, so there is a file to name. Same answers as JrnSave().
 JrnSaveName() {
-    global JrnDay, JrnBase, JrnAsk, NoteBusy, JrnNameBase
+    global JrnNameBase
     Critical
-    GuiControlGet, t, JrnEd:, JrnName
+    t := JrnGui["JrnName"].Value
     ; the box as it was filled is no change - even a title from Obsidian that
     ; the cleaning below would spell another way (too long, two spaces)
     if (t == JrnNameBase)
@@ -344,19 +332,19 @@ JrnSaveName() {
     if (JrnAsk)
         return "asking"
     if (NoteBusy) {
-        SetTimer, JrnNameSave, -300
+        SetTimer(JrnNameSave, -300)
         return "busy"
     }
     r := JrnRead(JrnDay, true)
     if (!r.ok || r.short) {
         JrnSay("could not read the note - trying again", true)
-        SetTimer, JrnNameSave, -3000
+        SetTimer(JrnNameSave, -3000)
         return "failed"
     }
     if (!r.exists) {
         if (!JrnWrite(r.f, JrnCompose(r, JrnDay, JrnBase))) {
             JrnSay("could not save - trying again", true)
-            SetTimer, JrnNameSave, -3000
+            SetTimer(JrnNameSave, -3000)
             return "failed"
         }
         if (JrnDay = LogicalDay())
@@ -367,69 +355,56 @@ JrnSaveName() {
         return "failed"
     }
     JrnNameBase := t
-    FormatTime, hm, , HH:mm
-    JrnSay("named " hm)
+    JrnSay("named " FormatTime(, "HH:mm"))
     return "saved"
 }
 
-; Through a temporary file and a move, in binary mode - DayNoteWrite()'s way,
-; for its reasons. A note held open by a sync gets two more tries.
+; Through a temporary file and a move - DayNoteWrite()'s way, for its
+; reasons. A note held open by a sync gets two more tries.
 JrnWrite(f, out) {
-    global JournalDir
-    if (!InStr(FileExist(JournalDir), "D"))
-        FileCreateDir, %JournalDir%
-    tmp := f ".tmp"
-    Loop 3 {
-        FileDelete, %tmp%
-        FileAppend, %out%, *%tmp%, UTF-8
-        if (!ErrorLevel) {
-            FileMove, %tmp%, %f%, 1
-            if (!ErrorLevel)
-                return true
-        }
-        Sleep, 150
+    try {
+        if !DirExist(JournalDir)
+            DirCreate(JournalDir)
     }
-    FileDelete, %tmp%
+    loop 3 {
+        if NoteReplace(f, out)
+            return true
+        Sleep(150)
+    }
     return false
 }
 
 ; The words you did not choose, kept where nothing ever clears them.
 JrnStash(day, text, what) {
-    global StateFile
     if (text = "")
         return ""
-    SplitPath, StateFile, , dir
+    SplitPath(StateFile, , &dir)
     if (dir = "")
         dir := A_ScriptDir
     dir .= "\backups\journal-conflicts"
-    if (!InStr(FileExist(dir), "D"))
-        FileCreateDir, %dir%
-    FormatTime, hms, , HHmmss
-    f := dir "\" day "-" what "-" hms ".md"
-    FileAppend, %text%, %f%, UTF-8
+    f := dir "\" day "-" what "-" FormatTime(, "HHmmss") ".md"
+    try {
+        if !DirExist(dir)
+            DirCreate(dir)
+        FileAppend(text, f, "UTF-8")
+    }
     return f
 }
 
 JrnAskShow(on) {
-    global JrnDay, JrnEdH
-    show := on ? "Show" : "Hide"
-    GuiControl, JrnEd:Move, JrnEdit, % "h" (on ? JrnEdH - 62 : JrnEdH)
-    GuiControl, JrnEd:%show%, JrnMsg
-    GuiControl, JrnEd:%show%, JrnKeep
-    GuiControl, JrnEd:%show%, JrnTake
-    GuiControl, JrnEd:, JrnMsg, % on ? "This day's note was changed somewhere else"
+    g := JrnGui
+    g["JrnEdit"].Move(, , , on ? JrnEdH - 62 : JrnEdH)
+    for name in ["JrnMsg", "JrnKeep", "JrnTake"]
+        g[name].Visible := on
+    g["JrnMsg"].Text := on ? "This day's note was changed somewhere else"
         . " (Obsidian?) while you were writing here. Which one stays? The other is"
         . " kept in backups\journal-conflicts." : ""
     if (on)
         JrnSay("")
 }
 
-JrnKeep:
-    JrnKeepMine()
-Return
-
 JrnKeepMine() {
-    global JrnDay, JrnBase, JrnAsk, JrnAskFile
+    global JrnBase, JrnAsk
     JrnStash(JrnDay, JrnAskFile, "from-the-note")
     JrnBase := JrnAskFile                ; that is what is being written over now
     JrnAsk := 0
@@ -437,27 +412,11 @@ JrnKeepMine() {
     JrnSave()
 }
 
-JrnTake:
-    JrnTakeFile()
-Return
-
 JrnTakeFile() {
-    global JrnDay
     JrnStash(JrnDay, JrnText(), "from-the-window")
     JrnLoad(JrnDay)
     JrnSay("yours is kept in backups")
 }
-
-; Typing: saved once it stops for a moment, not on every key.
-JrnTyped:
-    JrnFitDir()
-    SetTimer, JrnAutoSave, -1500
-Return
-
-JrnNamed:
-    JrnFitDir()
-    SetTimer, JrnNameSave, -1500
-Return
 
 ; Persian reads right to left. Each box - the title and the writing - takes
 ; the direction of its first letter: Persian (or any right-to-left script),
@@ -466,14 +425,14 @@ Return
 ; Looked at again only when that first letter changes language, so Windows' own
 ; switch (Ctrl + Right Shift / Ctrl + Left Shift) still holds in between.
 JrnFitDir() {
-    static was := {}
-    for i, name in ["JrnEdit", "JrnName"] {
-        GuiControlGet, t, JrnEd:, %name%
-        rtl := JrnRtl(t)
-        if (was.HasKey(name) && was[name] = rtl)
+    static was := Map()
+    for name in ["JrnEdit", "JrnName"] {
+        c := JrnGui[name]
+        rtl := JrnRtl(c.Value)
+        if (was.Has(name) && was[name] = rtl)
             continue
         was[name] := rtl
-        GuiControlGet, h, JrnEd:Hwnd, %name%
+        h := c.Hwnd
         st := DllCall("GetWindowLongPtr", "ptr", h, "int", -16, "ptr")
         ex := DllCall("GetWindowLongPtr", "ptr", h, "int", -20, "ptr")
         DllCall("SetWindowLongPtr", "ptr", h, "int", -16, "ptr", rtl ? st | 0x2 : st & ~0x2)            ; ES_RIGHT
@@ -484,32 +443,28 @@ JrnFitDir() {
 }
 
 ; Is the first letter of t from a right-to-left script - Persian, Arabic, Hebrew?
-JrnRtl(ByRef t) {
-    if (!RegExMatch(t, "(*UCP)\pL", m))
+JrnRtl(t) {
+    if (!RegExMatch(t, "(*UCP)\pL", &m))
         return false
-    c := Ord(m)
+    c := Ord(m[0])
     return (c >= 0x0590 && c <= 0x08FF) || (c >= 0xFB1D && c <= 0xFDFF) || (c >= 0xFE70 && c <= 0xFEFF)
 }
 
-JrnNameSave:
+JrnNameSave() {
     if (JrnSaveName() != "busy" && JrnClosing)
         JrnClose()
-Return
+}
 
-JrnAutoSave:
+JrnAutoSave() {
     if (JrnSave() = "saved" && JrnClosing)
         JrnHide()
-Return
+}
 
 ; Changes made somewhere else, taken up while nothing is being typed here.
-JrnWatch:
-    JrnLook()
-Return
-
 JrnLook() {
-    global JrnHwnd, JrnDay, JrnBase, JrnAsk, JrnNameBase
+    global JrnBase, JrnNameBase
     if (!DllCall("IsWindowVisible", "ptr", JrnHwnd)) {
-        SetTimer, JrnWatch, Off
+        SetTimer(JrnLook, 0)
         return
     }
     if (JrnAsk || !(JrnText() == JrnBase))
@@ -518,40 +473,32 @@ JrnLook() {
     if (!r.ok || r.short)
         return
     ; renamed somewhere else - Obsidian, Explorer - and not being typed here
-    GuiControlGet, t, JrnEd:, JrnName
-    if (r.exists && t == JrnNameBase
+    nm := JrnGui["JrnName"]
+    if (r.exists && nm.Value == JrnNameBase
         && !(JournalTitleOf(r.f) == JrnNameBase)) {
         JrnNameBase := JournalTitleOf(r.f)
-        GuiControl, JrnEd:, JrnName, %JrnNameBase%
+        nm.Value := JrnNameBase
         JrnFitDir()
     }
     if (r.body == JrnBase)
         return
     JrnBase := r.body
-    GuiControlGet, hEd, JrnEd:Hwnd, JrnEdit
-    DllCall("SendMessage", "ptr", hEd, "uint", 0xB0, "uint*", a, "uint*", b)   ; EM_GETSEL
-    GuiControl, JrnEd:, JrnEdit, % r.body
+    e := JrnGui["JrnEdit"]
+    a := 0, b := 0
+    DllCall("SendMessage", "ptr", e.Hwnd, "uint", 0xB0, "uint*", &a, "uint*", &b)   ; EM_GETSEL
+    e.Value := r.body
     JrnFitDir()
-    DllCall("SendMessage", "ptr", hEd, "uint", 0xB1, "ptr", a, "ptr", a)       ; caret back
+    SendMessage(0xB1, a, a, e)                                                      ; caret back
     JrnSay("updated from the note")
 }
 
 ;================================================================================
 ; Moving between days, and closing
 ;================================================================================
-JrnPrev:
-    JrnGo(DayShift(JrnDay, -1))
-Return
-
-JrnNext:
-    if (JrnDay < LogicalDay())
+JrnNextDay(*) {
+    if (StrCompare(JrnDay, LogicalDay()) < 0)
         JrnGo(DayShift(JrnDay, 1))
-Return
-
-JrnToday:
-    if (JrnDay != LogicalDay())
-        JrnGo(LogicalDay())
-Return
+}
 
 ; The day you were on is saved before another one is opened - and if it
 ; cannot be, you stay on it.
@@ -565,19 +512,20 @@ JrnGo(day) {
     JrnLoad(day)
 }
 
-JrnOpenFile:
+JrnOpenFile() {
     JrnSaveName()
     JrnSave()
-    if (FileExist(JournalFile(JrnDay)))
-        Run, % JournalFile(JrnDay)
+    f := JournalFile(JrnDay)
+    if (FileExist(f))
+        Run('"' f '"')
     else
         JrnSay("no note yet - write something first")
-Return
+}
 
-JrnEdClose:
-JrnEdEscape:
+JrnEdClose(*) {
     JrnClose()
-Return
+    return true                          ; hidden by JrnHide, never destroyed
+}
 
 ; Saved, then hidden. A save that is waiting for Daybook's own writer closes
 ; the window once it lands; the two-editors question keeps it open.
@@ -605,16 +553,15 @@ JrnClose() {
 JrnHide() {
     global JrnClosing
     JrnClosing := 0
-    SetTimer, JrnAutoSave, Off
-    SetTimer, JrnNameSave, Off
-    SetTimer, JrnWatch, Off
-    Gui, JrnEd:Hide
+    SetTimer(JrnAutoSave, 0)
+    SetTimer(JrnNameSave, 0)
+    SetTimer(JrnLook, 0)
+    JrnGui.Hide()
 }
 
 ; Settings changed: the journal turned off closes the window, saved.
 JrnSettingsChanged() {
-    global JournalOn, JrnBuilt, JrnHwnd
-    if (!JournalOn && JrnBuilt && DllCall("IsWindowVisible", "ptr", JrnHwnd))
+    if (!JournalOn && IsObject(JrnGui) && DllCall("IsWindowVisible", "ptr", JrnHwnd))
         JrnClose()
 }
 
@@ -626,35 +573,37 @@ JrnSettingsChanged() {
 ; on an item with nothing in it ends the list instead. Anywhere else it is a
 ; plain new line.
 JrnEnter() {
-    GuiControlGet, foc, JrnEd:FocusV
+    foc := ""
+    try foc := JrnGui.FocusedCtrl.Name
     if (foc = "JrnName") {               ; Enter on the title: named, and on to the writing
         JrnSaveName()
-        GuiControl, JrnEd:Focus, JrnEdit
+        JrnGui["JrnEdit"].Focus()
         return
     }
     if (foc != "JrnEdit")
         return
-    GuiControlGet, hEd, JrnEd:Hwnd, JrnEdit
-    DllCall("SendMessage", "ptr", hEd, "uint", 0xB0, "uint*", a, "uint*", b)   ; EM_GETSEL
-    ln  := DllCall("SendMessage", "ptr", hEd, "uint", 0xC9, "ptr", a, "ptr", 0, "ptr")   ; EM_LINEFROMCHAR
-    ls  := DllCall("SendMessage", "ptr", hEd, "uint", 0xBB, "ptr", ln, "ptr", 0, "ptr")  ; EM_LINEINDEX
+    hEd := JrnGui["JrnEdit"].Hwnd
+    a := 0, b := 0
+    DllCall("SendMessage", "ptr", hEd, "uint", 0xB0, "uint*", &a, "uint*", &b)   ; EM_GETSEL
+    row := DllCall("SendMessage", "ptr", hEd, "uint", 0xC9, "ptr", a, "ptr", 0, "ptr")   ; EM_LINEFROMCHAR
+    ls  := DllCall("SendMessage", "ptr", hEd, "uint", 0xBB, "ptr", row, "ptr", 0, "ptr")  ; EM_LINEINDEX
     len := DllCall("SendMessage", "ptr", hEd, "uint", 0xC1, "ptr", ls, "ptr", 0, "ptr")  ; EM_LINELENGTH
     line := ""
     if (len > 0) {
-        VarSetCapacity(buf, (len + 2) * 2, 0)
-        NumPut(len + 1, buf, 0, "ushort")                 ; EM_GETLINE: room, first
-        got := DllCall("SendMessage", "ptr", hEd, "uint", 0xC4, "ptr", ln, "ptr", &buf, "ptr")
-        line := StrGet(&buf, got, "UTF-16")
+        buf := Buffer((len + 2) * 2, 0)
+        NumPut("ushort", len + 1, buf)                    ; EM_GETLINE: room, first
+        got := DllCall("SendMessage", "ptr", hEd, "uint", 0xC4, "ptr", row, "ptr", buf, "ptr")
+        line := StrGet(buf, got, "UTF-16")
     }
     ins := "`r`n"
-    if (RegExMatch(line, "^([ \t]*)(?:([-*+])( \[.\])?|(\d+)([.)])) ", m)) {
-        if (Trim(SubStr(line, StrLen(m) + 1)) = "" && a = b && a = ls + len) {
+    if (RegExMatch(line, "^([ \t]*)(?:([-*+])( \[.\])?|(\d+)([.)])) ", &m)) {
+        if (Trim(SubStr(line, m.Len + 1)) = "" && a = b && a = ls + len) {
             DllCall("SendMessage", "ptr", hEd, "uint", 0xB1, "ptr", ls, "ptr", ls + len)  ; EM_SETSEL
             JrnReplaceSel(hEd, "")
             return
         }
-        mark := (m4 != "") ? (m4 + 1) m5 : m2 ((m3 != "") ? " [ ]" : "")
-        ins .= m1 mark " "
+        mark := (m[4] != "") ? (Integer(m[4]) + 1) m[5] : m[2] ((m[3] != "") ? " [ ]" : "")
+        ins .= m[1] mark " "
     }
     JrnReplaceSel(hEd, ins)
 }
@@ -664,10 +613,10 @@ JrnReplaceSel(hEd, s) {
     DllCall("SendMessage", "ptr", hEd, "uint", 0xB7, "ptr", 0, "ptr", 0)   ; EM_SCROLLCARET
 }
 
-#IfWinActive Daybook journal ahk_class AutoHotkeyGUI
+#HotIf WinActive("Daybook journal ahk_class AutoHotkeyGUI")
 Enter::JrnEnter()
 NumpadEnter::JrnEnter()
 ^s::JrnSave()
 ; A plain Edit types a box for Ctrl+Backspace instead of deleting a word.
-^BS::Send, ^+{Left}{Delete}
-#IfWinActive
+^BS::Send("^+{Left}{Delete}")
+#HotIf

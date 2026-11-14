@@ -2,17 +2,23 @@
 ; Laying the panel out - where every section and row ends up
 ;================================================================================
 ; Lay out whatever is open, top to bottom: JOURNAL (while the journal is on),
-; HABITS, MISSED (only when there is something in it), TODAY'S TASKS, LONG
-; TERM TASKS, TIME AT THE MACHINE.
+; HABITS, MISSED (only when there is something in it), TODAY'S TASKS, SHORT
+; TERM TASKS, LONG TERM TASKS, TIME AT THE MACHINE.
 ;
 ; The journal heads the panel - one line, the door to the day's writing. Then
 ; habits, because they are the part that is the same every morning -
-; a list you glance at and clear, above the list you think about. The two task
+; a list you glance at and clear, above the list you think about. The task
 ; lists share one pool of row controls, so a row's index in the pool has
 ; nothing to do with which task is in it.
+;================================================================================
+#Requires AutoHotkey v2.0
+
 Relayout() {
-    global
-    Gui, Panel:Default
+    global RowY, RowTask, Cards, Dots, PanelFootLine, PanelContentH, PanelScrollMax
+    global PanelScrollY, PanelRelaying, PanelH, StatsShown
+    if !IsObject(PanelGui)
+        return
+    g := PanelGui
     used := 0
     habUsed := 0
     ; RowTask too: a pool row left over from a longer list would otherwise still
@@ -31,10 +37,14 @@ Relayout() {
     y := 13
     ; The status keeps the left edge; the other three hang off the right one,
     ; so the top row follows the width the way every heading row does.
-    GuiControl, Panel:Move, StatusTxt, % "y" y
-    GuiControl, Panel:Move, TimerTxt,  % "x" (HdrNumR - 170) " y" y " w118"
-    GuiControl, Panel:Move, ModeTxt,   % "x" (HdrNumR - 50) " y" y " w12"
-    GuiControl, Panel:Move, BreakBtn,  % "x" (HdrNumR - 48) " y" (y + 1) " w48"
+    g["StatusTxt"].Move(, y)
+    ; The window buttons take the right end; the minutes, the circle and the
+    ; break switch sit in the middle, ending just before them.
+    bx := PanelW - 8 - PanelBtns.Width
+    PanelBtns.Place(bx, y - 1)
+    g["BreakBtn"].Move(bx - 40, y + 1, 32)
+    g["ModeTxt"].Move(bx - 54, y, 12)
+    g["TimerTxt"].Move(bx - 128, y, 72)
     y += 24
 
     ; From here down, everything is placed against y - so starting y further up
@@ -46,71 +56,60 @@ Relayout() {
 
     ; ---- Journal - first, a heading that opens a window, nothing under it
     if (JournalOn) {
-        PlaceHdr(y, 20, {"JrnHdr": "y" y
-                   , "JrnCnt": "x" (HdrNumR - 96) " y" (y + 2) " w96"})
+        PlaceHdr(y, 20, [["JrnHdr", "", y], ["JrnCnt", HdrNumR - 96, y + 2, 96]])
         y += 22
     } else {
-        GuiControl, Panel:Hide, JrnHdr
-        GuiControl, Panel:Hide, JrnCnt
+        g["JrnHdr"].Visible := false
+        g["JrnCnt"].Visible := false
     }
 
     ; ---- Habits
-    PlaceHdr(y, 20, {"HabHdr": "y" y
-               , "HabCnt": "x" (HdrNumR - 112) " y" (y + 2) " w36"
-               , "HabAdd": "x" (HdrNumR - 24) " y" (y - 2) " w24"})
-    GuiControl, Panel:, HabHdr, % Caret(OpenHabits) " HABITS"
+    PlaceHdr(y, 20, [["HabHdr", "", y], ["HabCnt", HdrNumR - 112, y + 2, 36], ["HabAdd", HdrNumR - 24, y - 2, 24]])
+    g["HabHdr"].Text := Caret(OpenHabits) " HABITS"
     y += 22
     if (OpenHabits)
-        habUsed := PlaceHabits(y)
-    Loop % HabPool {
+        habUsed := PlaceHabits(&y)
+    loop HabPool {
         if (A_Index > habUsed)
             HideHab(A_Index)
     }
 
     ; ---- Missed - just above Today, because what it asks is what goes on it
-    if (nMiss) {
-        PlaceHdr(y, 20, {"MissHdr": "y" y
-                   , "MissCnt": "x" (HdrNumR - 102) " y" (y + 2) " w26"})
-        GuiControl, Panel:, MissHdr, % Caret(OpenMissed) " MISSED"
+    if (NMiss) {
+        PlaceHdr(y, 20, [["MissHdr", "", y], ["MissCnt", HdrNumR - 102, y + 2, 26]])
+        g["MissHdr"].Text := Caret(OpenMissed) " MISSED"
         y += 22
         if (OpenMissed)
-            used := PlaceRows("M", y, used)
+            used := PlaceRows("M", &y, used)
     } else {
-        GuiControl, Panel:Hide, MissHdr
-        GuiControl, Panel:Hide, MissCnt
+        g["MissHdr"].Visible := false
+        g["MissCnt"].Visible := false
     }
 
     ; ---- Today
-    PlaceHdr(y, 20, {"TodayHdr": "y" y
-               , "TodayCnt": "x" (HdrNumR - 102) " y" (y + 2) " w26"
-               , "AddBtn":   "x" (HdrNumR - 24) " y" (y - 2) " w24"})
-    GuiControl, Panel:, TodayHdr, % Caret(OpenToday) " TODAY'S TASKS"
+    PlaceHdr(y, 20, [["TodayHdr", "", y], ["TodayCnt", HdrNumR - 102, y + 2, 26], ["AddBtn", HdrNumR - 24, y - 2, 24]])
+    g["TodayHdr"].Text := Caret(OpenToday) " TODAY'S TASKS"
     y += 22
     if (OpenToday)
-        used := PlaceRows("T", y, used)
+        used := PlaceRows("T", &y, used)
 
     ; ---- Short term - a deadline each, soonest first
-    PlaceHdr(y, 20, {"ShortHdr": "y" y
-               , "ShortCnt": "x" (HdrNumR - 102) " y" (y + 2) " w26"
-               , "ShortAdd": "x" (HdrNumR - 24) " y" (y - 2) " w24"})
-    GuiControl, Panel:, ShortHdr, % Caret(OpenShort) " SHORT TERM TASKS"
+    PlaceHdr(y, 20, [["ShortHdr", "", y], ["ShortCnt", HdrNumR - 102, y + 2, 26], ["ShortAdd", HdrNumR - 24, y - 2, 24]])
+    g["ShortHdr"].Text := Caret(OpenShort) " SHORT TERM TASKS"
     y += 22
     if (OpenShort)
-        used := PlaceRows("S", y, used)
+        used := PlaceRows("S", &y, used)
 
     ; ---- Long term
-    PlaceHdr(y, 20, {"LongHdr": "y" y
-               , "LongCnt": "x" (HdrNumR - 102) " y" (y + 2) " w26"
-               , "LongAdd": "x" (HdrNumR - 24) " y" (y - 2) " w24"})
-    GuiControl, Panel:, LongHdr, % Caret(OpenLong) " LONG TERM TASKS"
+    PlaceHdr(y, 20, [["LongHdr", "", y], ["LongCnt", HdrNumR - 102, y + 2, 26], ["LongAdd", HdrNumR - 24, y - 2, 24]])
+    g["LongHdr"].Text := Caret(OpenLong) " LONG TERM TASKS"
     y += 22
     if (OpenLong)
-        used := PlaceRows("L", y, used)
+        used := PlaceRows("L", &y, used)
 
     ; ---- Today so far
-    PlaceHdr(y, 20, {"StatsHdr":   "y" y
-               , "StatsTotal": "x" (HdrNumR - 96) " y" (y + 2) " w96"})
-    GuiControl, Panel:, StatsHdr, % Caret(OpenStats) " TIME AT THE MACHINE"
+    PlaceHdr(y, 20, [["StatsHdr", "", y], ["StatsTotal", HdrNumR - 96, y + 2, 96]])
+    g["StatsHdr"].Text := Caret(OpenStats) " TIME AT THE MACHINE"
     y += 20
     UpdateStats()
     if (OpenStats) {
@@ -129,22 +128,22 @@ Relayout() {
         if (fit > h)
             fit := h
         if (y >= PanelHdrH && fit >= 14) {
-            GuiControl, Panel:Move, StatsTxt, % "x" CardL " y" y " w" (valX - CardL - 8) " h" fit
-            GuiControl, Panel:Move, StatsVal, % "x" valX " y" y " w" valW " h" fit
-            GuiControl, Panel:Show, StatsTxt
-            GuiControl, Panel:Show, StatsVal
+            g["StatsTxt"].Move(CardL, y, valX - CardL - 8, fit)
+            g["StatsVal"].Move(valX, y, valW, fit)
+            g["StatsTxt"].Visible := true
+            g["StatsVal"].Visible := true
         } else {
-            GuiControl, Panel:Hide, StatsTxt
-            GuiControl, Panel:Hide, StatsVal
+            g["StatsTxt"].Visible := false
+            g["StatsVal"].Visible := false
         }
         y += h + 6
     } else {
-        GuiControl, Panel:Hide, StatsTxt
-        GuiControl, Panel:Hide, StatsVal
+        g["StatsTxt"].Visible := false
+        g["StatsVal"].Visible := false
     }
 
     ; ---- park the unused pool rows off-panel
-    Loop % RowPool {
+    loop RowPool {
         if (A_Index <= used)
             continue
         HideRow(A_Index)
@@ -168,7 +167,7 @@ Relayout() {
     if ((want != panH || scroll != PanelScrollY) && !PanelRelaying) {
         PanelScrollY := scroll
         PanelRelaying := 1
-        Relayout()
+        try Relayout()
         PanelRelaying := 0
         return
     }
@@ -182,7 +181,7 @@ Relayout() {
     ; it only sizes a panel that is up. Coming back lays out again anyway: see
     ; ShowPanel() and PnlSize.
     if (PanelVisible && !PanelIsMin())
-        Gui, Panel:Show, NoActivate w%PanelW% h%panH%
+        g.Show("NoActivate w" PanelW " h" panH)
     ApplyPanelShape()
     ; Two repaint problems in one call. Moving or shrinking a control does not
     ; repaint the space it left, so a list that got shorter leaves its old rows
@@ -190,13 +189,14 @@ Relayout() {
     ; the background is painted by hand, the parent paints straight over its own
     ; children, so the labels have to be redrawn after it.
     ; RDW_INVALIDATE|RDW_ERASE|RDW_ALLCHILDREN|RDW_UPDATENOW - the ALLCHILDREN
-    ; is the part "WinSet, Redraw" does not do, and without it rows come back
+    ; is the part a plain redraw does not do, and without it rows come back
     ; blank.
     DllCall("RedrawWindow", "ptr", PanelHwnd, "ptr", 0, "ptr", 0, "uint", 0x185)
 }
 
 ; Put a row of controls where it goes - or take it off the panel, if that is
 ; behind the pinned header at the top or the pinned footer at the bottom.
+; specs: [name, x, y, w] each, "" for "where it is".
 ;
 ; Hiding rather than letting it slide under: a control is a window of its own,
 ; and a window draws over its parent's background whatever the parent paints
@@ -204,15 +204,16 @@ Relayout() {
 ; line. Everything in one row goes or stays together, because half a heading
 ; peeping out from under the minutes is worse than no heading.
 PlaceHdr(y, tall, specs) {
-    global PanelHdrH, PanelFootLine
     show := (y >= PanelHdrH && y + tall <= PanelFootLine)
-    for name, opt in specs {
+    for sp in specs {
+        c := PanelGui[sp[1]]
         if (!show) {
-            GuiControl, Panel:Hide, %name%
+            c.Visible := false
             continue
         }
-        GuiControl, Panel:Move, %name%, %opt%
-        GuiControl, Panel:Show, %name%
+        c.GetPos(&cx, &cy, &cw)
+        c.Move((sp[2] = "") ? cx : sp[2], sp[3], (sp.Length >= 4) ? sp[4] : cw)
+        c.Visible := true
     }
     return show
 }
@@ -222,13 +223,12 @@ PlaceHdr(y, tall, specs) {
 ; and the on-top switch are exactly the things you go looking for, and having
 ; to scroll to the end of a long list to find them would be absurd.
 PlaceFoot(y) {
-    global HdrNumR
-    GuiControl, Panel:Move, FootTxt, % "y" (y + 2)
-    GuiControl, Panel:Move, ModeBtn, % "x" (HdrNumR - 106) " y" (y + 2) " w32"
-    GuiControl, Panel:Move, TopBtn,  % "x" (HdrNumR - 68)  " y" (y + 2) " w34"
-    GuiControl, Panel:Move, LockBtn, % "x" (HdrNumR - 30)  " y" (y + 2) " w30"
-    for _, name in ["FootTxt", "ModeBtn", "TopBtn", "LockBtn"]
-        GuiControl, Panel:Show, %name%
+    g := PanelGui
+    g["FootTxt"].Move(, y + 2)
+    g["ModeBtn"].Move(HdrNumR - 68, y + 2, 32)
+    g["LockBtn"].Move(HdrNumR - 30, y + 2, 30)
+    for name in ["FootTxt", "ModeBtn", "LockBtn"]
+        g[name].Visible := true
 }
 
 ; How much room the panel has: from where its top edge is to the bottom of the
@@ -236,20 +236,17 @@ PlaceFoot(y) {
 ; a floor, because a panel dragged to the bottom of the screen should still be
 ; usable rather than a two-row sliver.
 PanelRoom() {
-    global PanelHwnd, PanelMaxH, PanelX, PanelY
-    WinGetPos, px, py, , , ahk_id %PanelHwnd%
-    if (px = "")
-        px := PanelX, py := PanelY
-    SysGet, count, MonitorCount
+    px := PanelX, py := PanelY
+    try WinGetPos(&px, &py, , , PanelHwnd)
     best := 0
-    Loop % count {
-        SysGet, m, MonitorWorkArea, %A_Index%
+    loop MonitorGetCount() {
+        MonitorGetWorkArea(A_Index, &mLeft, &mTop, &mRight, &mBottom)
         if (px >= mLeft && px <= mRight && py >= mTop && py <= mBottom) {
             best := A_Index
             break
         }
     }
-    SysGet, m, MonitorWorkArea, % best ? best : 1
+    MonitorGetWorkArea(best ? best : MonitorGetPrimary(), &mLeft, &mTop, &mRight, &mBottom)
     ; Right down to the edge of the work area, with nothing held back. A panel
     ; put at the top of the screen should be able to fill it.
     room := mBottom - py
@@ -262,7 +259,7 @@ PanelRoom() {
 ; all fits, which is the usual case and why there is no scrollbar to look at
 ; until there is something to scroll.
 PanelScroll(dir) {
-    global PanelScrollY, PanelScrollMax, RowH, RowGap
+    global PanelScrollY
     want := PanelScrollY + dir * (RowH + RowGap) * 2
     if (want < 0)
         want := 0
@@ -277,15 +274,14 @@ PanelScroll(dir) {
 ; Whether a turn of the wheel belongs to the panel. Worked out fresh rather
 ; than read from Hot, which HoverCheck only refreshes every 150ms - long enough
 ; that the first notch after the pointer arrives would go to the window behind.
-PanelCanScroll() {
-    global PanelVisible, PanelScrollMax, PanelHwnd
-    if (!PanelVisible || PanelScrollMax <= 0 || Ghost())
+PanelCanScroll(*) {
+    if (!PanelVisible || PanelScrollMax <= 0 || Ghost() || !PanelHwnd)
         return false
-    WinGetPos, px, py, pw, ph, ahk_id %PanelHwnd%
-    if (px = "")
+    try WinGetPos(&px, &py, &pw, &ph, PanelHwnd)
+    catch
         return false
-    CoordMode, Mouse, Screen
-    MouseGetPos, mx, my
+    CoordMode("Mouse", "Screen")
+    MouseGetPos(&mx, &my)
     return (mx >= px && mx <= px + pw && my >= py && my <= py + ph)
         && WindowSeenAt(PanelHwnd, mx, my)    ; the wheel belongs to a window on top of it
 }
@@ -299,8 +295,8 @@ Caret(open) {
 
 ; Draw the tasks of one list into the next free pool rows. Returns the new
 ; high-water mark.
-PlaceRows(list, ByRef y, used) {
-    global
+PlaceRows(list, &y, used) {
+    g := PanelGui
     shown := 0
     ; The tasks of this list, as indexes into Tasks. Short term goes soonest
     ; deadline first; the array itself is never re-sorted, because a pending
@@ -311,7 +307,7 @@ PlaceRows(list, ByRef y, used) {
             rowOrder.Push(i)
     if (list = "S")
         DueSort(rowOrder)
-    for _, i in rowOrder {
+    for i in rowOrder {
         t := Tasks[i]
         if (++shown > MaxRows)
             break
@@ -323,6 +319,7 @@ PlaceRows(list, ByRef y, used) {
         if (used >= RowPool)
             break
         n := ++used
+        RowTask.Length := n, RowY.Length := n
         RowTask[n] := i
         RowY[n] := y                     ; where the note box opens
         Cards.Push({y: y, kind: "T", pool: n})
@@ -336,38 +333,28 @@ PlaceRows(list, ByRef y, used) {
         if (list = "S" && t.due != "")
             label := DueTag(t.due) "  " t.text
 
-        ; Each colour goes into a variable first: "+c%" only forces an
-        ; expression when the % is the FIRST thing in the parameter, and here
-        ; the parameter already starts with "Panel:+c".
-        chkGlyph := done ? Chr(0x2713) : Chr(0x2610)
-        chkCol   := done ? CGreen : CMuted
-        xCol     := fail ? CRed : CDim
+        ; the one box shows the mark: an empty box, a tick, or a dropped task's cross
+        chkCol   := done ? CGreen : fail ? CRed : CMuted
+        chkMark  := done ? Chr(0x2713) : fail ? Chr(0x2715) : Chr(0x2610)
         txtCol   := (done || fail) ? CDim : CText
         ; due today or tomorrow: amber, the colour that means "this one needs you"
         if (list = "S" && !done && !fail && t.due != "" && DueDays(t.due) <= 1)
             txtCol := CAmber
 
-        GuiControl, Panel:Move, RowChk%n%, % "x" (CardL + 6) " y" y
-        GuiControl, Panel:+c%chkCol%, RowChk%n%
-        GuiControl, Panel:, RowChk%n%, %chkGlyph%
-        GuiControl, Panel:Show, RowChk%n%
-
-        GuiControl, Panel:Move, RowX%n%, % "x" (CardL + 30) " y" y
-        GuiControl, Panel:+c%xCol%, RowX%n%
-        GuiControl, Panel:, RowX%n%, % Chr(0x2715)
-        GuiControl, Panel:Show, RowX%n%
+        g["RowChk" n].Move(CardL + 6, y)
+        PSay("RowChk" n, chkMark, chkCol)
+        g["RowChk" n].Visible := true
 
         if (miss) {
-            GuiControl, Panel:Move, RowGo%n%, % "x" (CardL + 50) " y" y
-            GuiControl, Panel:Show, RowGo%n%
+            g["RowGo" n].Move(CardL + 28, y)
+            g["RowGo" n].Visible := true
         } else
-            GuiControl, Panel:Hide, RowGo%n%
+            g["RowGo" n].Visible := false
 
-        txtX := CardL + (miss ? 72 : 52)
-        GuiControl, Panel:Move, RowTxt%n%, % "x" txtX " y" y " w" (CardR - txtX - 6)
-        GuiControl, Panel:+c%txtCol%, RowTxt%n%
-        GuiControl, Panel:, RowTxt%n%, %label%
-        GuiControl, Panel:Show, RowTxt%n%
+        txtX := CardL + (miss ? 50 : 30)
+        g["RowTxt" n].Move(txtX, y, CardR - txtX - 6)
+        PSay("RowTxt" n, label, txtCol)
+        g["RowTxt" n].Visible := true
 
         y += RowH + RowGap
     }
@@ -377,23 +364,15 @@ PlaceRows(list, ByRef y, used) {
 }
 
 HideRow(n) {
-    GuiControl, Panel:Hide, RowChk%n%
-    GuiControl, Panel:Hide, RowX%n%
-    GuiControl, Panel:Hide, RowGo%n%
-    GuiControl, Panel:Hide, RowTxt%n%
+    for pre in ["RowChk", "RowGo", "RowTxt"]
+        PanelGui[pre n].Visible := false
 }
 
 ; Draw the habits into their own pool of rows, and work out where every dot
 ; goes while we are here. The dots themselves are painted later, by OnErase,
 ; out of the Dots list this fills - a circle is not a control.
-;
-; Explicitly scoped, unlike PlaceRows above it: this one runs a loop inside a
-; loop, and the note at the top of OnErase says what assume-global costs when a
-; repaint lands in the middle of one.
-PlaceHabits(ByRef y) {
-    global Habits, HabPool, HabitDays, HabDotD, HabDotGap, HabNumW
-    global CardL, CardR, RowH, RowGap, Cards, Dots, HabRow, PanelHdrH, PanelFootLine
-    global CGreen, CMuted, CText, CDim, CBlue
+PlaceHabits(&y) {
+    g := PanelGui
     used := 0
     today := LogicalDay()
     ; Right to left: the streak sits against the card's right edge, the week of
@@ -406,7 +385,6 @@ PlaceHabits(ByRef y) {
     nameW := dotsX - 6 - nameX
     if (nameW < 40)                      ; an absurdly narrow panel: name wins
         nameW := 40
-    dy := 0
     for i, hb in Habits {
         ; behind the pinned header, or below the pinned footer - skip it, but
         ; still walk past the room it takes, or everything below it would move
@@ -417,12 +395,11 @@ PlaceHabits(ByRef y) {
         if (used >= HabPool)
             break
         r := ++used
+        HabRow.Length := Max(HabRow.Length, r)
         HabRow[r] := i
         Cards.Push({y: y, kind: "H", pool: r})
 
         did := HabitDidToday(hb)
-        ; Into a variable first - see the same note in PlaceRows.
-        ;
         ; The NAME does not dim when it is done, which is where a habit parts
         ; company with a task. A finished task is business closed and greys out
         ; to get out of the way; a habit ticked today is a win, and the row
@@ -431,30 +408,25 @@ PlaceHabits(ByRef y) {
         ; Frozen today: a blue snowflake where the box was, the same blue as its
         ; dot, so a freeze is visible on the row and not only in the dots.
         frozen := (!did && HabitRested(hb, today))
-        chkCol := did ? CGreen : frozen ? CBlue : CMuted
-        txtCol := CText
-        numCol := HabitStreakColour(hb)
 
-        GuiControl, Panel:Move, HabChk%r%, % "x" (CardL + 6) " y" y
-        GuiControl, Panel:+c%chkCol%, HabChk%r%
-        GuiControl, Panel:, HabChk%r%, % did ? Chr(0x2713) : frozen ? Chr(0x2744) : Chr(0x2610)
-        GuiControl, Panel:Show, HabChk%r%
+        g["HabChk" r].Move(CardL + 6, y)
+        PSay("HabChk" r, did ? Chr(0x2713) : frozen ? Chr(0x2744) : Chr(0x2610)
+            , did ? CGreen : frozen ? CBlue : CMuted)
+        g["HabChk" r].Visible := true
 
-        GuiControl, Panel:Move, HabTxt%r%, % "x" nameX " y" y " w" nameW
-        GuiControl, Panel:+c%txtCol%, HabTxt%r%
-        GuiControl, Panel:, HabTxt%r%, % hb.text
-        GuiControl, Panel:Show, HabTxt%r%
+        g["HabTxt" r].Move(nameX, y, nameW)
+        PSay("HabTxt" r, hb.text, CText)
+        g["HabTxt" r].Visible := true
 
-        GuiControl, Panel:Move, HabNum%r%, % "x" numX " y" y " w" HabNumW
-        GuiControl, Panel:+c%numCol%, HabNum%r%
-        GuiControl, Panel:, HabNum%r%, % HabitStreakText(hb)
-        GuiControl, Panel:Show, HabNum%r%
+        g["HabNum" r].Move(numX, y, HabNumW)
+        PSay("HabNum" r, HabitStreakText(hb), HabitStreakColour(hb))
+        g["HabNum" r].Visible := true
 
         ; Each dot remembers which habit and which day it stands for, because
         ; it is also a button - OnPanelClick hit-tests this list. A dot is not a
-        ; control, so a click on one reaches the window, not a g-label.
+        ; control, so a click on one reaches the window, not a control.
         dy := y + (RowH - HabDotD) // 2
-        Loop % HabitDays {
+        loop HabitDays {
             day := DayShift(today, A_Index - HabitDays)
             st  := HabitDayState(hb, day, today)
             if (st = "none")             ; before this habit existed: no dot
@@ -470,54 +442,48 @@ PlaceHabits(ByRef y) {
 }
 
 HideHab(n) {
-    GuiControl, Panel:Hide, HabChk%n%
-    GuiControl, Panel:Hide, HabTxt%n%
-    GuiControl, Panel:Hide, HabNum%n%
+    for pre in ["HabChk", "HabTxt", "HabNum"]
+        PanelGui[pre n].Visible := false
 }
 
 ; Recount, recolour the +, then lay out.
 Refresh() {
-    global
-    nOpen := 0, nToday := 0, nLong := 0, nMiss := 0, nShort := 0
-    for _, t in Tasks {
+    global NOpen, NToday, NLong, NMiss, NShort, LastShownMin
+    NOpen := 0, NToday := 0, NLong := 0, NMiss := 0, NShort := 0
+    for t in Tasks {
         if (t.list = "T") {
-            nToday++
+            NToday++
             if (t.status = "open")
-                nOpen++
+                NOpen++
         } else if (t.list = "M")
-            nMiss++
+            NMiss++
         else if (t.list = "S")
-            nShort++
+            NShort++
         else
-            nLong++
+            NLong++
     }
-    GuiControl, Panel:, MissCnt, %nMiss%
-    GuiControl, Panel:, TodayCnt, %nOpen%
-    GuiControl, Panel:, ShortCnt, %nShort%
-    GuiControl, Panel:, LongCnt, %nLong%
+    if !IsObject(PanelGui)               ; the tests: no panel to show it on
+        return
+    g := PanelGui
+    g["MissCnt"].Text := NMiss
+    g["TodayCnt"].Text := NOpen
+    g["ShortCnt"].Text := NShort
+    g["LongCnt"].Text := NLong
     ; Habits count DOWN to nothing left, which is the opposite of the task
     ; lists and is the point: "3/5" is a thing you finish, and it goes green
     ; the moment you do.
-    nHab := Habits.Length()
+    nHab := Habits.Length
     if (nHab) {
         nDone := HabitsDone()
-        hcol := (nDone >= nHab) ? CGreen : CMuted
-        GuiControl, Panel:+c%hcol%, HabCnt
-        GuiControl, Panel:, HabCnt, % nDone "/" nHab
-    } else {
-        GuiControl, Panel:+c%CMuted%, HabCnt
-        GuiControl, Panel:, HabCnt,
-    }
+        PSay("HabCnt", nDone "/" nHab, (nDone >= nHab) ? CGreen : CMuted)
+    } else
+        PSay("HabCnt", "", CMuted)
     ; the + IS the indicator now: amber means the list is empty. What yesterday
     ; left undone has a section of its own - MISSED - rather than a light.
-    owed := (nToday = 0)
-    col := owed ? CAmber : CMuted
-    GuiControl, Panel:+c%col%, AddBtn
-    GuiControl, Panel:, AddBtn, +
+    PSay("AddBtn", "+", (NToday = 0) ? CAmber : CMuted)
     JrnPanelCount()
     LastShownMin := 9999
     UpdateTimerText()
     SetStatusText()
     Relayout()
 }
-

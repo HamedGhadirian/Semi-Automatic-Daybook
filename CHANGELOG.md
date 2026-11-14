@@ -3,6 +3,30 @@
 Notable changes, newest first. The version is in `lib\Config.ahk`
 (`DaybookVersion`).
 
+## 1.2.0 — 2026-11-14
+
+- **Now AutoHotkey v2.** The same Daybook, on the AutoHotkey that is still looked after. Your settings, tasks, habits and journal carry over untouched. The plain zip now needs [AutoHotkey v2](https://www.autohotkey.com/download/); the portable one brings it along.
+- **Start with Windows is a tick** - in the tray menu and in Settings. No more Task Scheduler by hand.
+- **It tells you about updates.** Once a day it asks GitHub whether there is a newer version. Nothing installs without your click, and Settings turns the question off.
+- **Dark or light,** and the two keys can be changed - both in Settings.
+- **More room for the names.** The ✕ beside each task is gone. Right-click a task: **Drop** if it won't happen (the day keeps it crossed, with why), or **Delete** if it was a mistake (no record).
+
+<details>
+<summary><b>More</b> (10)</summary>
+
+- Fixed: after a film watched without touching anything, the first touch counted the whole film as a break and cleared the clock. A break now counts from the last touch or the last sound, whichever came later.
+- A dropped task shows its cross in the tick box. A click there takes the drop back.
+- Fewer settings in the window. Rounded corners is gone (every window is square). The undo time, how long a silence may be and how long input is ignored after the break key are in `Daybook.ini` only. The sit timer's settings are in a new order, with examples.
+- The journal folder has a **pick** button, and a line under it says which files are yours to change and which Daybook writes again.
+- The settings window is shared with Daybook's sister tools: General, then Keys, then Daybook's own. Everything still saves as you change it and works at once.
+- Tray menu: Daybook's items first, then Settings, Start with Windows, Run as administrator, Look for updates now, Help, Reload, Exit. A double-click still shows or hides the panel.
+- Run as administrator switches on at once: Daybook starts again, and Windows asks once.
+- Made a Startup shortcut or a Task Scheduler task by hand before? Delete it and use the tick, or Daybook starts twice.
+- It runs as its own `Daybook.exe` (made on your PC at the first start, with Daybook's icon), so the tray settings and the firewall list show it by name.
+- Your own tray icon now goes in `Daybook.ini` under `[Icons]`. An old `[Files] TrayIcon` line is carried over.
+
+</details>
+
 ## 1.1.0
 
 - **A journal window** - JOURNAL on the panel (or the tray) opens your part of the day's note; any day, saved as you type. It reads and writes the note itself, so what you write in Obsidian is what it shows.

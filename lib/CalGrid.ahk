@@ -14,52 +14,43 @@
 ; Windows 95 look, and one click on it only highlights a day. This one looks
 ; like the rest of Daybook, and a day is a button.
 ;
-; Each day is two controls: a coloured square, and the number on top of it. A
-; Text control in v1 cannot be given a background colour of its own (only
-; BackgroundTrans) - the first version tried, and every done day came out as
-; dark text on the dark window, invisible. A Progress bar CAN, which is what
-; the panel's top bar already is. The square is Disabled so that Windows looks
-; straight past it for the click, to the number.
+; Each day is one Text control: its background is the square's colour and its
+; text the number, centred. (v1 could not colour a Text control's background,
+; so each day was a Progress bar with a number laid on top; v2 can.)
 ;
 ; The controls are named from a prefix, so the window that owns them keeps its
-; own names: prefix "HabEd" makes HabEdPrev, HabEdMonthTxt, HabEdNext,
-; HabEdSq1..42 and HabEdCell1..42.
+; own names: prefix "HabEd" makes HabEdPrev, HabEdMonthTxt, HabEdNext and
+; HabEdCell1..42.
 ;
 ; Dates are plain yyyy-MM-dd text and are only ever moved with DayShift and
 ; CalMonthShift - no table of month lengths, no 30-day guesses - so leap years
 ; and the turn of a year need nothing special, today or in 2040.
 ;================================================================================
+#Requires AutoHotkey v2.0
 
-; Build the grid. y is the top of the month line; the squares start 48 below
-; it. The three labels are what a click on a day, the left arrow and the right
-; arrow run. Returns the y just under the last row.
-CalGridBuild(gui, p, L, y, cw, ch, gap, dayLabel, prevLabel, nextLabel) {
-    global                               ; the controls' variables must be global
-    local opt, k, r, name, gx, gy
-    Gui, %gui%:Font, s10 Norm c%CText%, Segoe UI
-    opt := "v" p "Prev g" prevLabel " x" L " y" y " w30 h24 +0x200 BackgroundTrans"
-    Gui, %gui%:Add, Text, %opt%, % Chr(0x25C0)
-    opt := "v" p "MonthTxt x" (L + 34) " y" y " w" (7 * (cw + gap) - 72) " h24 Center +0x200 BackgroundTrans"
-    Gui, %gui%:Add, Text, %opt%
-    opt := "v" p "Next g" nextLabel " x" (L + 7 * (cw + gap) - gap - 30) " y" y " w30 h24 Right +0x200 BackgroundTrans"
-    Gui, %gui%:Add, Text, %opt%, % Chr(0x25B6)
-    Gui, %gui%:Font, s8 Norm c%CDim%, Segoe UI
-    for k, name in ["M", "T", "W", "T", "F", "S", "S"] {
-        opt := "x" (L + (k - 1) * (cw + gap)) " y" (y + 30) " w" cw " h16 Center BackgroundTrans"
-        Gui, %gui%:Add, Text, %opt%, %name%
-    }
-    Gui, %gui%:Font, s9 Norm c%CText%, Segoe UI
-    Loop 42 {
+; Build the grid on window g. y is the top of the month line; the squares start
+; 48 below it. onDay(k) is called with the square's number (1-42) when a day
+; is clicked, onPrev and onNext for the arrows. Returns the y just under the
+; last row.
+CalGridBuild(g, p, L, y, cw, ch, gap, onDay, onPrev, onNext) {
+    g.SetFont("s10 Norm c" CText, "Segoe UI")
+    OnClicks(g.Add("Text", "v" p "Prev x" L " y" y " w30 h24 +0x200 BackgroundTrans", Chr(0x25C0)), onPrev)
+    g.Add("Text", "v" p "MonthTxt x" (L + 34) " y" y " w" (7 * (cw + gap) - 72) " h24 Center +0x200 BackgroundTrans")
+    OnClicks(g.Add("Text", "v" p "Next x" (L + 7 * (cw + gap) - gap - 30) " y" y " w30 h24 Right +0x200 BackgroundTrans", Chr(0x25B6)), onNext)
+    g.SetFont("s8 Norm c" CDim, "Segoe UI")
+    for k, name in ["M", "T", "W", "T", "F", "S", "S"]
+        g.Add("Text", "x" (L + (k - 1) * (cw + gap)) " y" (y + 30) " w" cw " h16 Center BackgroundTrans", name)
+    g.SetFont("s9 Norm c" CText, "Segoe UI")
+    loop 42 {
         k := A_Index, r := (k - 1) // 7
         gx := L + Mod(k - 1, 7) * (cw + gap), gy := y + 48 + r * (ch + gap)
-        opt := "v" p "Sq" k " x" gx " y" gy " w" cw " h" ch
-             . " Disabled -E0x200 -Theme Background" CCard " c" CCard
-        Gui, %gui%:Add, Progress, %opt%, 0
-        opt := "v" p "Cell" k " g" dayLabel " x" gx " y" gy " w" cw " h" ch " Center +0x200 BackgroundTrans"
-        Gui, %gui%:Add, Text, %opt%
+        c := g.Add("Text", "v" p "Cell" k " x" gx " y" gy " w" cw " h" ch " Center +0x200 Background" CCard)
+        OnClicks(c, CalGridClick.Bind(onDay, k))       ; a quick second click is a click too
     }
     return y + 48 + 6 * (ch + gap)
 }
+
+CalGridClick(onDay, k, *) => onDay.Call(k)
 
 ; The Monday on or before the 1st of a month (yyyy-MM): the first square.
 ; 2000-01-03 was a Monday, day number 2 (see WeekOf). The double Mod keeps a
@@ -70,30 +61,28 @@ CalGridStart(month) {
 }
 
 ; The month line and its two arrows. An arrow that leads nowhere is dimmed.
-CalGridTitle(gui, p, month, canPrev, canNext) {
-    global CText, CDim
-    FormatTime, title, % StrReplace(month, "-") "01", MMMM yyyy
-    GuiControl, %gui%:, %p%MonthTxt, %title%
-    col := canPrev ? CText : CDim
-    GuiControl, %gui%:+c%col%, %p%Prev
-    GuiControl, %gui%:MoveDraw, %p%Prev
-    col := canNext ? CText : CDim
-    GuiControl, %gui%:+c%col%, %p%Next
-    GuiControl, %gui%:MoveDraw, %p%Next
+CalGridTitle(g, p, month, canPrev, canNext) {
+    g[p "MonthTxt"].Text := DayWords(month "-01", "MMMM yyyy")
+    for which, on in Map("Prev", canPrev, "Next", canNext) {
+        c := g[p which]
+        c.SetFont("c" (on ? CText : CDim))
+        c.Redraw()
+    }
 }
 
 ; One square: its colour, its number's colour, and the number ("" for none).
-CalGridCell(gui, p, k, bg, fg, txt) {
-    GuiControl, %gui%:+Background%bg%, %p%Sq%k%
-    GuiControl, %gui%:+c%fg%, %p%Cell%k%
-    GuiControl, %gui%:, %p%Cell%k%, %txt%
-    GuiControl, %gui%:MoveDraw, %p%Cell%k%   ; on top of the new colour
+CalGridCell(g, p, k, bg, fg, txt) {
+    c := g[p "Cell" k]
+    c.Opt("Background" bg)
+    c.SetFont("c" fg)
+    c.Text := txt
+    c.Redraw()
 }
 
 ; A month (yyyy-MM) moved by n months, either way, across years: "2026-12" and
 ; 1 is "2027-01". Whole-number arithmetic, nothing to drift.
 CalMonthShift(month, n) {
-    m := (SubStr(month, 1, 4) + 0) * 12 + (SubStr(month, 6, 2) - 1) + n
+    m := Integer(SubStr(month, 1, 4)) * 12 + (Integer(SubStr(month, 6, 2)) - 1) + n
     y := m // 12, mo := Mod(m, 12) + 1
     return Format("{:04}-{:02}", y, mo)
 }

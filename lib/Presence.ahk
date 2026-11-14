@@ -1,14 +1,15 @@
 ﻿;================================================================================
 ; Presence
 ;================================================================================
+#Requires AutoHotkey v2.0
+
 ; Windows' own display-state notification. Registering delivers the current
 ; value immediately, so DisplayOn is correct from the first second.
 WatchDisplay() {
-    global PanelHwnd
-    VarSetCapacity(g, 16, 0)
-    DllCall("ole32\CLSIDFromString", "wstr", "{6FE69556-704A-47A0-8F24-C28D936FDA47}", "ptr", &g)
-    DllCall("RegisterPowerSettingNotification", "ptr", PanelHwnd, "ptr", &g, "uint", 0, "ptr")
-    OnMessage(0x218, "OnPowerBroadcast")      ; WM_POWERBROADCAST
+    g := Buffer(16, 0)
+    DllCall("ole32\CLSIDFromString", "wstr", "{6FE69556-704A-47A0-8F24-C28D936FDA47}", "ptr", g)
+    DllCall("RegisterPowerSettingNotification", "ptr", PanelHwnd, "ptr", g, "uint", 0, "ptr")
+    OnMessage(0x218, OnPowerBroadcast)        ; WM_POWERBROADCAST
 }
 
 OnPowerBroadcast(wParam, lParam, msg, hwnd) {
@@ -16,7 +17,7 @@ OnPowerBroadcast(wParam, lParam, msg, hwnd) {
     if (wParam != 0x8013)                     ; PBT_POWERSETTINGCHANGE
         return
     ; POWERBROADCAST_SETTING: GUID(16) + DWORD DataLength(4) + Data
-    DisplayOn := (NumGet(lParam + 20, "uchar") != 0)     ; 0 off, 1 on, 2 dimmed
+    DisplayOn := (NumGet(lParam, 20, "uchar") != 0)     ; 0 off, 1 on, 2 dimmed
 }
 
 ; What ENDS a declared break: the keyboard, mouse CLICKS and mouse SCROLL - but
@@ -25,10 +26,9 @@ OnPowerBroadcast(wParam, lParam, msg, hwnd) {
 ;
 ; A_TimeIdlePhysical cannot express that: it lumps every hooked device
 ; together, movement included. So the keyboard is read from A_TimeIdleKeyboard,
-; and clicks and wheel events are timestamped by the pass-through hotkeys above.
-; Presence itself (Present) goes through SeenMs() below.
+; and clicks and wheel events are timestamped by the pass-through hotkeys in
+; Keys.ahk. Presence itself (Present) goes through SeenMs() below.
 IdleMs() {
-    global LastClickTick
     k := A_TimeIdleKeyboard
     if (!LastClickTick)
         return k
@@ -44,6 +44,21 @@ SeenMs() {
     return CountMouseMove ? A_TimeIdlePhysical : IdleMs()
 }
 
+; How long you have really been gone, once Daybook decides you are: since the
+; last thing that said you were here - your last touch, or the last sound while
+; sound counts. Without the sound, a film watched for an hour without touching
+; anything looked like an hour away the moment it ended, and the first touch
+; after it cleared the clock as if that hour had been a break.
+GoneMs() {
+    gone := SeenMs()
+    if (AudioCapMin > 0 && LastSoundAt) {
+        heard := A_TickCount - LastSoundAt
+        if (heard < gone)
+            gone := heard
+    }
+    return gone
+}
+
 Present() {
     ; A break you declared yourself outranks every sensor in here. This is the
     ; whole point of it: no signal can tell "walking round the room doing squats
@@ -51,7 +66,7 @@ Present() {
     ; mouse to stop the monitor sleeping makes it worse. So you get a switch.
     if (BreakMode)
         return false
-    capped :=(SeenMs() < AudioCapMin * 60000)
+    capped := (SeenMs() < AudioCapMin * 60000)
     ; The screen being dark is the strongest "you are gone" there is, and it is
     ; Windows' own judgement, arrived at by the same rule that decides whether
     ; a film should keep the monitor awake.
@@ -103,8 +118,8 @@ Locked() {
 }
 
 ScreensaverOn() {
-    VarSetCapacity(r, 4, 0)
-    DllCall("SystemParametersInfo", "uint", 114, "uint", 0, "ptr", &r, "uint", 0)
+    r := Buffer(4, 0)
+    DllCall("SystemParametersInfo", "uint", 114, "uint", 0, "ptr", r, "uint", 0)
     return NumGet(r, 0, "int")
 }
 
@@ -115,12 +130,13 @@ ScreensaverOn() {
 ; silence; sound now counts for SoundHoldS after it was last heard. Re-bound once
 ; a minute so it follows devices coming and going, and on any failure.
 AudioPlaying() {
-    global Meters, MeterAt, LastSoundAt
-    if (!Meters.Length() || A_TickCount - MeterAt > 60000)
+    global MeterAt, LastSoundAt
+    if (!Meters.Length || A_TickCount - MeterAt > 60000)
         BindMeters()
-    for _, m in Meters {
-        p := 0
-        if (DllCall(NumGet(NumGet(m+0)+3*A_PtrSize), "ptr", m, "float*", p) != 0) {
+    for m in Meters {
+        p := 0.0
+        try ComCall(3, m, "float*", &p)         ; IAudioMeterInformation::GetPeakValue
+        catch {
             MeterAt := 0                        ; gone - rebind on the next call
             continue
         }
@@ -135,36 +151,32 @@ AudioPlaying() {
 BindMeters() {
     global Meters, MeterAt
     MeterAt := A_TickCount
-    for _, m in Meters
-        ObjRelease(m)
+    for m in Meters
+        try ObjRelease(m)
     Meters := []
-    en := ComObjCreate("{BCDE0395-E52F-467C-8E3D-C4579291692E}"
-                     , "{A95664D2-9614-4F35-A746-DE8DB63617E6}")
-    if (!en)
+    try en := ComObject("{BCDE0395-E52F-467C-8E3D-C4579291692E}"
+                      , "{A95664D2-9614-4F35-A746-DE8DB63617E6}")
+    catch
         return
     ; IMMDeviceEnumerator::EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE)
     col := 0
-    DllCall(NumGet(NumGet(en+0)+3*A_PtrSize), "ptr", en, "uint", 0, "uint", 1, "ptr*", col)
-    ObjRelease(en)
+    try ComCall(3, en, "uint", 0, "uint", 1, "ptr*", &col)
     if (!col)
         return
     n := 0
-    DllCall(NumGet(NumGet(col+0)+3*A_PtrSize), "ptr", col, "uint*", n)      ; GetCount
-    VarSetCapacity(iid, 16, 0)
-    DllCall("ole32\CLSIDFromString", "wstr", "{C02216F6-8C67-4B5B-9D00-D008E73E0064}", "ptr", &iid)
-    Loop, %n%
-    {
+    try ComCall(3, col, "uint*", &n)                            ; GetCount
+    iid := Buffer(16, 0)
+    DllCall("ole32\CLSIDFromString", "wstr", "{C02216F6-8C67-4B5B-9D00-D008E73E0064}", "ptr", iid)
+    loop n {
         dev := 0
-        DllCall(NumGet(NumGet(col+0)+4*A_PtrSize), "ptr", col, "uint", A_Index - 1, "ptr*", dev)
+        try ComCall(4, col, "uint", A_Index - 1, "ptr*", &dev)  ; Item
         if (!dev)
             continue
         m := 0                                 ; IMMDevice::Activate(IAudioMeterInformation)
-        DllCall(NumGet(NumGet(dev+0)+3*A_PtrSize), "ptr", dev, "ptr", &iid
-              , "uint", 1, "ptr", 0, "ptr*", m)
+        try ComCall(3, dev, "ptr", iid, "uint", 1, "ptr", 0, "ptr*", &m)
         ObjRelease(dev)
         if (m)
             Meters.Push(m)
     }
     ObjRelease(col)
 }
-

@@ -1,10 +1,11 @@
 ﻿;================================================================================
-; Daybook.ahk - always-on-top day panel: tasks, sit-timer, passive app log
+; Daybook.ahk - always-on-top day panel: tasks, habits, sit-timer, journal
 ;================================================================================
-; Its own process. Nothing else launches it - it is started by a Task Scheduler
-; task at logon (see AUTOSTART below), so it does not depend on Shortcuts.ahk.
+; AutoHotkey v2 (2.0 or later). Its own process: it starts itself when you sign
+; in once Start with Windows is ticked (tray menu, or Settings > GENERAL).
 ;
-; KEYS - only two. Everything else is a click on the panel, see MOUSE.
+; KEYS - only two, and both can be changed in Settings > KEYS. Everything else
+; is a click on the panel, see MOUSE.
 ;   Win + F6            one loop, a step a press: hidden -> SOLID -> DIM ->
 ;                       GHOST -> hidden. It is also the way out of GHOST, which
 ;                       takes no clicks at all
@@ -35,15 +36,15 @@
 ;                         Esc          cancel
 ;                       From SHORT TERM TASKS the + asks for the deadline next,
 ;                       on a small calendar: click a day (or "tomorrow", "in a
-;                       week", "no deadline") and it is set. Esc goes back to the box with
-;                       your words still in it.
+;                       week", "no deadline") and it is set. Esc goes back to
+;                       the box with your words still in it.
 ;                       A task always starts open. What already happened goes
 ;                       in the journal, not on the list.
 ;   JOURNAL             opens the journal window: your part of the day's note,
 ;                       any day, saved as you type - see JournalWin.ahk
-;   break / back        declare a break by hand, same as Win+F1
+;   break / back        declare a break by hand, same as the break key
 ;
-; HABITS - the first section, and the one that is the same every day
+; HABITS - the one section that is the same every day
 ;   A habit is not a task: it comes back tomorrow whether you did it or not,
 ;   and the only thing worth showing is whether the chain is unbroken. So each
 ;   row is a tick box, a name, a week of dots and one number.
@@ -58,24 +59,21 @@
 ;   dim at zero. The count in the heading is how many are ticked today, and it
 ;   turns green when they all are.
 ;
-;   Habits come FIRST on the panel, above both task lists: they are the part
-;   that is the same every morning, a list you glance at and clear rather than
-;   one you think about.
-;
 ;   Habits.ahk holds the rules. Each day's note carries the habits with the
 ;   run each had reached, and Daybook.md the streaks and two weeks of them.
 ;
 ; THE THREE SWITCHES - bottom right, in a row
 ;   solid / dim         panel mode; click to swap the two. GHOST is not on this
 ;                       switch: a GHOST panel cannot be clicked, so the switch
-;                       would be a one-way door - Win+F6 goes there and back.
-;                       The small circle beside the minutes shows the mode too:
+;                       would be a one-way door - the panel key goes there and
+;                       back. The small circle beside the minutes shows the
+;                       mode too:
 ;                         DIM    see-through, lights up when your pointer
 ;                                crosses it, clickable
 ;                         GHOST  see-through, FADES AWAY when your pointer
 ;                                crosses it, and cannot be clicked at all - the
 ;                                mouse goes straight to whatever is behind it.
-;                                Win+F6 once more hides it.
+;                                The panel key once more hides it.
 ;                         SOLID  fully opaque, clickable, does not react to the
 ;                                pointer at all
 ;   on top / top        always on top, on or off. On is the default and is what
@@ -100,17 +98,14 @@
 ;   TWO STRIPS NEVER MOVE. The top one - the bar, the status, the minutes and
 ;   the break switch - because a readout you have to scroll to is not a
 ;   readout. The bottom one - the two keys, and the mode / on top / lock
-;   switches - because those are exactly the things you go looking for, and
-;   scrolling to the end of a long list to find the lock would be absurd.
+;   switches - because those are exactly the things you go looking for.
 ;   Anything that scrolls behind either strip is hidden rather than slid under,
 ;   since a control always draws over its parent whatever the parent paints.
 ;
 ;   How wide it is and how tall it may get are both numbers in Settings -
 ;   [Look] WidthPx and MaxHeightPx. Not a draggable edge: a window with no
 ;   frame has no sizing border, so dragging one means a loop that follows the
-;   pointer and lays the whole panel out on every step, and a panel that is
-;   sometimes exactly as tall as the screen and sometimes two pixels short is a
-;   worse thing to own than a box you type 800 into once.
+;   pointer and lays the whole panel out on every step.
 ;
 ;================================================================================
 ; WHAT THE COLOURS MEAN
@@ -122,7 +117,7 @@
 ;   amber     30-45 min
 ;   red       over 45 min, and it breathes
 ;
-; The breathe is the only animation in the program, it moves on a ~2.4s cycle
+; The breathe is the only animation in the program, it moves on a ~1.2s cycle
 ; rather than blinking, and it stops by itself after 15 minutes of no input:
 ; by then you have either got up or you are not there, and pulsing at an empty
 ; chair is what makes people uninstall things like this.
@@ -130,14 +125,14 @@
 ; The digits count DOWN while you are inside the 45 minutes and UP once you are
 ; past it ("13m left" -> "+4m over"), so overstaying is a number you can see.
 ; They are MINUTES, and they repaint once a minute. A per-second counter in the
-; corner of your eye is a distraction, which is the whole reason the digits can
-; be turned off at all - and turning them off loses nothing, because the bar
-; already carries the same information.
+; corner of your eye is a distraction - and the bar already carries the same
+; information.
 ;
 ; The + beside TODAY'S TASKS is the other channel: it turns static amber, with
-; no movement, meaning "I need words from you" - the list is empty, or yesterday
-; rolled over with unfinished items you have not explained yet. Press it and it
-; either starts that review or opens capture, whichever you actually owe.
+; no movement, meaning "I need words from you" - the list is empty.
+;
+; Dark or light: Settings > GENERAL > Theme. Daybook starts again to change
+; its colours (it takes a second; nothing is lost).
 ;
 ;================================================================================
 ; PRESENCE - how it knows you are actually there
@@ -156,14 +151,13 @@
 ;   left the room     -> nothing holds it, it blanks -> you are gone, reset
 ;
 ; It also makes the reset VISIBLE. You do not have to wonder how long to stay
-; away: it resets when your screen goes dark, which on this machine is the
+; away: it resets when your screen goes dark, which on most machines is the
 ; 5-minute display timeout in the Balanced power plan.
 ;
 ; Audio is kept as a fallback for the one case the display signal gets wrong:
 ; an app that pins the display awake for audio-only playback (Chrome does this
 ; for YouTube). AudioCapMin bounds how long that can hold presence up. Sound
 ; is read from every playback device, not just the default one.
-;
 ;
 ; Any input counts as being here, mouse MOVEMENT included - reading with a hand
 ; on the mouse is sitting. Walking round the room and nudging the mouse to keep
@@ -179,8 +173,7 @@
 ; present for that sample. Process names, not window titles: titles change on
 ; every tab and every document, so a day aggregates into hundreds of strings
 ; instead of twenty readable buckets - and titles carry document names and page
-; titles into a folder that syncs to your phone. Titles are a later, opt-in
-; thing, deliberately not a default.
+; titles into a folder that syncs to your phone.
 ;
 ; Idle time is never counted. Walking away with Chrome focused is not three
 ; hours of Chrome, and getting that wrong is why most cheap time trackers
@@ -189,9 +182,8 @@
 ;================================================================================
 ; THE JOURNAL
 ;================================================================================
-; One markdown file per day in JournalDir, named YYYY-MM-DD.md to match the
-; handwritten journals in the folder above it - kept in its own subfolder so
-; generated files never mix with the ones you wrote yourself.
+; One markdown file per day in the journal folder, named YYYY-MM-DD.md - with
+; a title after the date once you give the day one.
 ;
 ; The top of each note is YOURS - it opens with a "## journal" heading - and
 ; Daybook keeps one block at the bottom, between two markers: the day's tasks
@@ -220,42 +212,34 @@
 ; state is written the moment it changes.
 ;
 ; If the PC was off at 03:00 the rollover happens at the next start, on behalf
-; of the day that ended. Unfinished tasks are not deleted: they stay, their
-; carry count goes up (the small x2 beside them), and the + stays amber until
-; you have said why they did not happen.
+; of the day that ended. Unfinished tasks are not deleted: they move to MISSED,
+; their carry count goes up (the small x2 in front of them), and they wait
+; there for you to say what happened.
 ;
 ;================================================================================
-; AUTOSTART (do this once, by hand)
-;================================================================================
-; Task Scheduler > Create Task
-;   General : Run only when user is logged on, Run with highest privileges
-;   Trigger : At log on (your user)
-;   Action  : Start a program
-;             the AutoHotkey v1 exe, e.g.
-;             "C:\Program Files\AutoHotkey\v1.1.37.02\AutoHotkeyU64.exe"
-;             argument: the full path to this file, in quotes
-;   Settings: untick "Stop the task if it runs longer than..."
-;
-; Highest privileges matters: without it Win+F6 and Win+F1 die whenever an
-; elevated window has the focus. The If !A_IsAdmin block further down asks for
-; it when the file is simply double-clicked, so the scheduled task is only
-; needed to have it start by itself.
-;
-; A Startup-folder shortcut works too and needs no Task Scheduler - it just
-; cannot give the script highest privileges, so the keys go quiet over elevated
-; windows.
-;
-;================================================================================
-; SETTINGS
+; SETTINGS, STARTING, UPDATES
 ;================================================================================
 ; Tray menu > Settings opens a window with every setting in it, saved as you
-; change it and in force the moment it is saved - see SettingsWin.ahk. It
-; scrolls, so it can grow. The same settings are in Daybook.ini beside this
-; script, where they carry the reasons as well as the numbers; a link at the
-; bottom of the window opens it. That file is read once, at start, so editing
-; it needs a reload and the window does not.
+; change it and in force the moment it is saved. The same settings are in
+; Daybook.ini beside this script, where they carry the reasons as well as the
+; numbers; a link at the bottom of the window opens it. That file is read at
+; start, so editing it by hand needs a reload and the window does not.
 ;
-; The journal can be turned off entirely there - [Journal] Write. Nothing is
+; Start with Windows (a tick in the tray menu and in Settings) starts Daybook
+; when you sign in: a shortcut in your Startup folder, or with Run as
+; administrator on, a Task Scheduler task - so Windows does not ask each time.
+;
+; Run as administrator is OPTIONAL, and off unless you ask for it. Without it
+; exactly one thing does not work: the two keys go quiet while a window that is
+; itself running as administrator has the focus, because Windows does not let
+; an ordinary program see keys meant for an elevated one. Everything else - the
+; timer, the habits, the journal, every click on the panel - is the same.
+;
+; Once a day Daybook asks GitHub whether there is a newer version, and says so
+; in the tray. Nothing installs without your click; an update never touches
+; Daybook.ini, Daybook-state.txt, backups\ or log\.
+;
+; The journal can be turned off entirely - Settings > THE JOURNAL. Nothing is
 ; then written to the folder, and the panel, the timer and the habit streaks
 ; carry on exactly as they are.
 ;
@@ -264,62 +248,55 @@
 ;================================================================================
 ;   - per-task due times. Task records already carry .due and .asked for
 ;     them.
-;   - drop shadows. The corners turned out to be free - Windows 11 will round
-;     a frameless window if you ask it to, see ApplyPanelShape() - but a shadow
-;     still needs the whole panel drawn as one GDI+ layered bitmap, and
-;     everything here is real controls on a plain window, which is what keeps
-;     the focus behaviour honest.
+;   - drop shadows. The corners are free - Windows 11 will round a frameless
+;     window if you ask it to, see ApplyPanelShape() - but a shadow still needs
+;     the whole panel drawn as one layered bitmap, and everything here is real
+;     controls on a plain window, which is what keeps the focus behaviour
+;     honest.
 ;   - forcing anything: dimming, locking, blocking. NagLevel is the hook and
 ;     ApplySitState() is the one place any of it would live.
 ;   - window titles in the log (see THE LOG above).
+;
 ;================================================================================
+; THE CODE
+;================================================================================
+; This file only starts things: one Kit.Start below. The settings window, the
+; tray menu's frame, the keys, Start with Windows, administrator, the theme and
+; updates are the kit's (lib\Kit, shared by every script of the family);
+; everything that is Daybook's own is in lib\ - lib\All.ahk lists each part
+; and what it does. tests\ checks them (run-tests.ps1).
+;
+; FILES Daybook makes, all next to this script
+;   Daybook.ini         your settings, and where the panel was
+;   Daybook-state.txt   your tasks and habits with their whole history - see
+;                       Store.ahk for how it is kept safe
+;   backups\            a copy of the state from each day it changed, and of
+;                       each day note before Daybook first rewrote it
+;   log\                every click, as it happened
+;   errors.log          anything that went wrong, instead of a dialog
+;================================================================================
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+#Include %A_LineFile%\..\lib\Kit\Kit.ahk
+#Include %A_LineFile%\..\lib\All.ahk
 
-; v1, and it has to be: this is written in v1 commands throughout and v2 would
-; stop on the first line of it. #Requires turns that into a sentence saying so
-; rather than a syntax error.
-#Requires AutoHotkey v1.1.33+
-#SingleInstance force
-#NoEnv
 ; A_TimeIdleKeyboard reports nothing unless the keyboard hook is installed, and
 ; presence must not depend on some hotkey happening to install it as a side
-; effect. See IdleMs().
-#InstallKeybdHook
-; Same for A_TimeIdlePhysical and mouse movement - see Present().
-#InstallMouseHook
-SendMode Input
-SetWorkingDir %A_ScriptDir%
-SetBatchLines -1
+; effect. See IdleMs(). The same for A_TimeIdlePhysical and mouse movement.
+InstallKeybdHook()
+InstallMouseHook()
+SendMode("Input")
+SetWorkingDir(A_ScriptDir)
+try ProcessSetPriority("H")
 
-; Administrator is OPTIONAL, and off unless you ask for it - [General]
-; RunAsAdmin in Daybook.ini. Without it exactly one thing does not work: Win+F6
-; and Win+F1 go quiet while a window that is itself running as administrator
-; has the focus, because Windows does not let an ordinary program see keys
-; meant for an elevated one. Everything else - the timer, the habits, the
-; journal, every click on the panel - is the same either way.
-;
-; Started from a scheduled task with highest privileges this is already true
-; and the block is skipped. Decline the Windows prompt and Daybook carries on
-; without it rather than refusing to start.
-;
-; Read with a plain IniRead: this runs before lib\Settings.ahk exists.
-IniRead, DaybookAsAdmin, %A_ScriptDir%\Daybook.ini, General, RunAsAdmin, 0
-if (!A_IsAdmin && DaybookAsAdmin = 1) {
-    try {
-        Run *RunAs "%A_AhkPath%" "%A_ScriptFullPath%"
-        ExitApp
-    }
-}
-Process, Priority, , H
-
-;================================================================================
-; The code
-;================================================================================
-; This file only starts things. Everything else is in lib\ - lib\All.ahk lists
-; each part and what it does, in the order it loads.
-;
-; The folder is self-contained: the two files Daybook writes for itself,
-; Daybook.ini and Daybook-state.txt, are made beside this one on the first run,
-; and lib\Settings.ahk is its own copy of the .ini reader rather than a
-; reference to one somewhere else. Copy the folder anywhere and it runs.
-;================================================================================
-#Include %A_ScriptDir%\lib\All.ahk
+; keep: what is yours beside Daybook.ahk, which an update never writes (the
+; .ini and errors.log always are). appId stays what it was before the kit, so
+; a button pinned to the taskbar holds.
+Kit.Start({name: "Daybook", version: DaybookVersion, repo: "HamedGhadirian/Semi-Automatic-Daybook"
+    , repoWas: ["HamedPhixer/Semi-Automatic-Daybook"]      ; the account's name before 2026-11
+    , ini: IniFile, template: DaybookIniTemplate(), appId: "Ahk.Daybook"
+    , icon: "icon.png", iconWas: ["Files", "TrayIcon"]       ; [Icons] Tray; until 1.2.0 [Files] TrayIcon
+    , adminWhy: "So the two keys also work while a program that runs as administrator is in front."
+    , keep: ["Daybook-state.txt", "Daybook-state.unreadable-*", "backups", "log"]
+    , init: () => DaybookStart(), keys: DaybookKeys(), rows: () => DaybookRows(), apply: () => DaybookApply()
+    , menu: (m) => DaybookTray(m), default: "Show / hide panel", onTheme: () => DaybookThemeChanged()})

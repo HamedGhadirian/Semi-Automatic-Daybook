@@ -1,10 +1,11 @@
 ﻿;================================================================================
 ; SOLID / DIM / GHOST, always on top, and showing or hiding the panel
 ;================================================================================
+#Requires AutoHotkey v2.0
+
 ; DIM -> GHOST -> SOLID -> DIM. It starts on DIM, so the first press still does
 ; what the old two-way toggle did and the habit survives the extra state.
 CycleMode() {
-    global PanelMode
     SetPanelMode(Mod(PanelMode + 1, 3))
 }
 
@@ -31,43 +32,35 @@ ToggleOnTop() {
 ; float when the panel floats, and are ordinary windows when it does not: the
 ; journal used to stay over everything while the panel itself was not on top.
 ; Set just before each one is shown, and by ApplyOnTop for the ones open.
-; Only ever called on a window already built - a Gui option on one that is not
-; would make an empty window.
-SideOnTop(gui) {
-    global PanelOnTop
-    Gui, % gui ":" (PanelOnTop ? "+" : "-") "AlwaysOnTop"
+SideOnTop(g) {
+    if IsObject(g)
+        g.Opt((PanelOnTop ? "+" : "-") "AlwaysOnTop")
 }
 
-; Gui +/-AlwaysOnTop rather than WinSet: this changes the GUI's own option, so
-; it survives the Gui,Show that every Relayout() ends with. A WinSet would be
-; quietly undone the next time you opened a section.
+; The Gui's own +/-AlwaysOnTop rather than WinSetAlwaysOnTop: this changes the
+; Gui's own option, so it survives the Show that every Relayout() ends with.
 ;
 ; WS_EX_NOACTIVATE (0x08000000) moves with it, and that is the whole of
 ; "clicking it does not bring it forward". The flag says the window can never
 ; take focus, which is exactly right while the panel floats over your work - a
 ; readout must not steal the keyboard from a game or an editor - and exactly
 ; wrong once it is an ordinary window, because ACTIVATING is how a click raises
-; a window. With the flag on, Windows refuses, and the only thing lifting the
-; panel was the hand-rolled SetWindowPos in OnPanelClick - which the very next
-; click on any other window put straight back. Dropping the flag along with
-; always-on-top hands the job back to Windows, and the panel then behaves like
-; every other window on the screen, every time and not just the first.
+; a window. Dropping the flag along with always-on-top hands the job back to
+; Windows, and the panel then behaves like every other window on the screen.
 ;
 ; Hover still works while it is off, and only where the panel can be SEEN: a
 ; panel buried under another window does not light up, tip or take the wheel
-; when your pointer crosses where it is - WindowSeenAt() in SeenAt.ahk.
+; when your pointer crosses where it is - WindowSeenAt() (lib\Kit\SeenAt.ahk).
 ;
 ; As an ordinary window (PanelTaskbar) it never has the flag: clicking a window
 ; and having it take the keyboard is what a window does, on top or not.
 ApplyOnTop() {
-    global PanelOnTop, PanelHwnd, PanelTaskbar, JrnHwnd, HabEdHwnd, CapHwnd, NoteHwnd, DueHwnd
-    Gui, % "Panel:" (PanelOnTop ? "+" : "-") "AlwaysOnTop"
-    for gui, hwnd in {JrnEd: JrnHwnd, HabEd: HabEdHwnd, Cap: CapHwnd, Note: NoteHwnd, Due: DueHwnd}
-        if (hwnd && DllCall("IsWindowVisible", "ptr", hwnd))
-            SideOnTop(gui)
-    WinSet, ExStyle, % ((PanelOnTop && !PanelTaskbar) ? "+" : "-") "0x08000000"
-        , ahk_id %PanelHwnd%
-    GuiControl, Panel:, ModeTxt, % ModeGlyph()
+    PanelGui.Opt((PanelOnTop ? "+" : "-") "AlwaysOnTop")
+    for g in [JrnGui, HabEdGui, CapGui, NoteGui, DueGui]
+        if (IsObject(g) && DllCall("IsWindowVisible", "ptr", g.Hwnd))
+            SideOnTop(g)
+    try WinSetExStyle(((PanelOnTop && !PanelTaskbar) ? "+" : "-") "0x08000000", PanelHwnd)
+    PanelGui["ModeTxt"].Text := ModeGlyph()
     SetFootBtns()
     SetTrayOnTop()
 }
@@ -76,57 +69,58 @@ ApplyOnTop() {
 ; settings window. Windows only adds or removes a taskbar button when a window
 ; is shown, so a visible panel is hidden and shown again around the change.
 ApplyWindowKind() {
-    global PanelTaskbar, PanelKind, PanelVisible
+    global PanelKind
     if (PanelKind = PanelTaskbar)
         return
     if (PanelVisible)
-        Gui, Panel:Hide
+        PanelGui.Hide()
     if (PanelTaskbar)
-        Gui, Panel:-ToolWindow +MinimizeBox
+        PanelGui.Opt("-ToolWindow +MinimizeBox")
     else
-        Gui, Panel:+ToolWindow -MinimizeBox
+        PanelGui.Opt("+ToolWindow -MinimizeBox")
     PanelKind := PanelTaskbar
     ApplyOnTop()
     if (PanelVisible)
-        Gui, Panel:Show, NoActivate
+        PanelGui.Show("NoActivate")
+}
+
+; The window buttons' minimise: down to its taskbar button when it has one,
+; else hidden - an overlay has nowhere to minimise to.
+PanelMinimise() {
+    if (PanelTaskbar && PanelVisible)
+        WinMinimize(PanelHwnd)
+    else if PanelVisible
+        TogglePanel()
+}
+
+; The window buttons' close: hidden, as the panel key hides it. Daybook goes on.
+PanelHideBtn() {
+    if PanelVisible
+        TogglePanel()
 }
 
 ; Minimised from its taskbar button.
 PanelIsMin() {
-    global PanelHwnd
-    WinGet, mm, MinMax, ahk_id %PanelHwnd%
-    return (mm = -1)
+    try return WinGetMinMax(PanelHwnd) = -1
+    return false
 }
 
 ; SOLID / DIM / GHOST as a word. The tray menu is the only place the mode is
 ; readable when the circle is hidden, so it says which one you are in rather
 ; than just listing the three.
 ModeName() {
-    global PanelMode
     return (PanelMode = 0) ? "SOLID" : (PanelMode = 1) ? "DIM" : "GHOST"
 }
 
-; Both of these are called before BuildTray() has run - ShowPanel() happens
-; first - and a Menu command naming an item that does not exist yet is an
-; error, so they wait for the menu to exist.
+; The tray menu shows both, and is made again from the top when either
+; changes (KitTray.Build, which calls DaybookTray). Before the menu exists -
+; the panel is shown first - there is nothing to change.
 SetTrayOnTop() {
-    global PanelOnTop, TrayReady
-    if (!TrayReady)
-        return
-    if (PanelOnTop)
-        Menu, Tray, Check, Always on top
-    else
-        Menu, Tray, Uncheck, Always on top
+    if TrayReady
+        KitTray.Build()
 }
 
 SetTrayMode() {
-    global TrayModeItem, TrayReady
-    if (!TrayReady)
-        return
-    fresh := "Panel mode: " ModeName()
-    if (fresh = TrayModeItem)
-        return
-    Menu, Tray, Rename, %TrayModeItem%, %fresh%
-    TrayModeItem := fresh
+    if TrayReady
+        KitTray.Build()
 }
-

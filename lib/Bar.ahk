@@ -1,6 +1,8 @@
 ﻿;================================================================================
 ; Sit timer -> the top bar
 ;================================================================================
+#Requires AutoHotkey v2.0
+
 ApplySitState() {
     global EdgeState
     if (BreakMode)
@@ -23,7 +25,7 @@ ApplySitState() {
     }
     ; the fill moves with the clock even when the colour has not changed
     pct := BreakMode ? 0 : Round(SitSec / (SitBreakMin * 60) * 100)
-    GuiControl, Panel:, TopBar, % (pct > 100 ? 100 : pct)
+    PanelGui["TopBar"].Value := (pct > 100 ? 100 : pct)
     ; NagLevel > 0 would escalate from here.
 }
 
@@ -38,39 +40,32 @@ SetStatusText() {
         txt := "SITTING " SitWarnMin "M+", col := CAmber
     else
         txt := "FOCUS", col := CGreen
-    GuiControl, Panel:, StatusTxt, %txt%
-    GuiControl, Panel:+c%col%, StatusTxt
-    GuiControl, Panel:, StatusTxt, %txt%      ; re-set so the colour repaints
+    PSay("StatusTxt", txt, col)
     SetBreakBtn()
 }
 
 ; the button in the header says what pressing it will do
 SetBreakBtn() {
-    col := BreakMode ? CBreak : CDim       ; into a variable first - see PlaceRows
-    GuiControl, Panel:+c%col%, BreakBtn
-    GuiControl, Panel:, BreakBtn, % BreakMode ? "back" : "break"
+    PSay("BreakBtn", BreakMode ? "back" : "break", BreakMode ? CBreak : CDim)
 }
 
 ; Same shape as the break switch above: the word says what the panel is, and
 ; the colour is what makes it readable at a glance from across the desk.
 SetLockBtn() {
-    col := PanelLocked ? CText : CDim
-    GuiControl, Panel:+c%col%, LockBtn
-    GuiControl, Panel:, LockBtn, % PanelLocked ? "locked" : "lock"
+    PSay("LockBtn", PanelLocked ? "locked" : "lock", PanelLocked ? CText : CDim)
 }
 
 ; The two switches beside the lock. The mode is spelled out here because the
 ; circle beside the minutes goes away while the panel is not on top; the on-top
 ; switch is bright while it is on, the way the lock is bright while locked.
 SetFootBtns() {
-    GuiControl, Panel:, ModeBtn, % Format("{:L}", ModeName())
-    col := PanelOnTop ? CText : CDim
-    GuiControl, Panel:+c%col%, TopBtn
-    GuiControl, Panel:, TopBtn, % PanelOnTop ? "on top" : "top"
+    PanelGui["ModeBtn"].Text := StrLower(ModeName())
+    if IsObject(PanelBtns)
+        PanelBtns.SetTop(PanelOnTop)              ; the pin among the window buttons
 }
 
 SetBarColour(colour) {
-    GuiControl, Panel:+c%colour%, TopBar
+    PanelGui["TopBar"].Opt("c" colour)
 }
 
 ; The only animation, and it gives up on an empty chair. One tick per shade over
@@ -84,16 +79,15 @@ Breathe() {
         SetBarColour(CRed)
         return
     }
-    static shades := ["8A2A3C", "A33049", "C03A57", "FF4D6D", "C03A57", "A33049"
-                    , "8A2A3C", "742536"]
-    BreathStep := Mod(BreathStep, shades.Length()) + 1
-    SetBarColour(shades[BreathStep])
+    BreathStep := Mod(BreathStep, CBreathe.Length) + 1
+    SetBarColour(CBreathe[BreathStep])
 }
 
 ; Counts DOWN inside the 45 minutes, UP once past it. Minutes only, repainted
-; once a minute - see the note at the top about why there are no seconds here.
-; LastShownMin is a key for what is on screen, prefixed by state, so switching
-; state always repaints even when the minute number happens to match.
+; once a minute - see the note at the top of Daybook.ahk about why there are no
+; seconds here. LastShownMin is a key for what is on screen, prefixed by state,
+; so switching state always repaints even when the minute number happens to
+; match.
 UpdateTimerText() {
     global LastShownMin
     if (BreakMode || Away) {
@@ -104,17 +98,16 @@ UpdateTimerText() {
             m := ((s > AwaySec) ? s : AwaySec) // 60, col := CDim
         }
         key := (BreakMode ? "b" : "a") m
-        if (key == LastShownMin)
+        if (key == String(LastShownMin))
             return
         LastShownMin := key
-        GuiControl, Panel:+c%col%, TimerTxt
-        GuiControl, Panel:, TimerTxt, % "away " m "m"
+        PSay("TimerTxt", "away " m "m", col)
         return
     }
     left := SitBreakMin * 60 - SitSec
     m := (left >= 0) ? Ceil(left / 60) : -Floor(left / 60)
     key := ((left >= 0) ? "l" : CutShort ? "c" : "o") m
-    if (key == LastShownMin)
+    if (key == String(LastShownMin))
         return
     LastShownMin := key
     ; Overdue and back early from a break: still counting up, but saying why the
@@ -123,10 +116,5 @@ UpdateTimerText() {
         txt := m "m left"
     else
         txt := CutShort ? "break cut short +" m "m" : "+" m "m over"
-    col := (left >= 0) ? CText : CRed
-    ; a colour change on a Text control only shows once its text is set again,
-    ; hence the second assignment rather than a redundant one
-    GuiControl, Panel:+c%col%, TimerTxt
-    GuiControl, Panel:, TimerTxt, %txt%
+    PSay("TimerTxt", txt, (left >= 0) ? CText : CRed)
 }
-

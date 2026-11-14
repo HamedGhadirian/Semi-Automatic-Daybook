@@ -2,40 +2,47 @@
 ; Tasks
 ;================================================================================
 ; Every task has an id, a number it keeps for life. The panel never shows it;
-; it is what lets Daybook.md say "this line is that task" after the words on
-; it have changed - see Sync.ahk. Never reused, so a line left over from a task
-; deleted long ago can never be mistaken for a new one.
+; it is what lets a finished day's record (Past) and a note say "this is that
+; task" after the words on it have changed. Never reused, so a line left over
+; from a task deleted long ago can never be mistaken for a new one.
+#Requires AutoHotkey v2.0
+
+; Tasks[i], or "" when there is no such place in the list - a click on a row
+; whose task went a moment ago, a menu opened for one that was deleted since.
+TaskAt(i) => (IsInteger(i) && i >= 1 && i <= Tasks.Length) ? Tasks[i] : ""
+
 AddTask(text, list := "T", status := "open", due := "") {
     global NextTaskId
     text := Trim(RegExReplace(text, "[\r\n\t]+", " "))
     if (text = "")
         return
     CommitMark()                     ; anything pending belongs to another task
-    Tasks.Push({list: list, text: text, status: status, carry: 0
+    Tasks.Push(Rec({list: list, text: text, status: status, carry: 0
               , born: LogicalDay(), due: (list = "S") ? due : "", asked: 0, id: NextTaskId++
-              , notes: {}, doneOn: (status = "open") ? "" : CurDay})
+              , notes: DayMap(), doneOn: (status = "open") ? "" : CurDay, since: ""}))
     SaveState()
     Refresh()
     ; The line is not written yet - see CommitMark(). Held for MarkDelayMs, it
     ; absorbs a typo fix or a delete made in the next few seconds.
-    PendMark("T", Tasks.Length(), (status = "done") ? "unplanned" : "add")
+    PendMark("T", Tasks.Length, (status = "done") ? "unplanned" : "add")
 }
 
 ; Renaming inside the grace window costs nothing: the task's line has not been
 ; written, and CommitMark() builds it from the CURRENT text, so a typo fixed
 ; seconds after typing it leaves no trace of the typo at all.
 ;
-; Past the window the old name is already on disk. The journal is append-only -
-; that is what makes it crash-proof and safe to edit in Obsidian - so the honest
-; move is to record the change rather than pretend it never happened.
+; Past the window the old name is already on disk. The log is append-only -
+; that is what makes it crash-proof - so the honest move is to record the
+; change rather than pretend it never happened.
 ;
 ; == and not =, which ignores case: "buy Milk" to "buy milk" is a rename too.
 RenameTask(i, newText) {
     newText := Trim(RegExReplace(newText, "[\r\n\t]+", " "))
-    if (!Tasks[i] || newText = "" || newText == Tasks[i].text)
+    t := TaskAt(i)
+    if (!t || newText = "" || newText == t.text)
         return
-    old := Tasks[i].text
-    Tasks[i].text := newText
+    old := t.text
+    t.text := newText
     SaveState()
     Refresh()
     if (PendMarkKind = "T" && PendMarkTask = i)
@@ -49,7 +56,7 @@ RenameTask(i, newText) {
 ; count and its deadline cleared. (Moving it back to Today and missing it again
 ; starts the count over, which is the honest reading of it.)
 TaskMoveTo(i, list) {
-    t := Tasks[i]
+    t := TaskAt(i)
     if (!t || t.list = list)
         return
     CommitMark()                     ; indexes are about to be read again
@@ -82,10 +89,11 @@ TaskSetDue(id, due) {
 ; task into that day's note: it was not on the day's list, but it was finished
 ; that day.
 SetStatus(i, status) {
-    if (!Tasks[i])
+    t := TaskAt(i)
+    if (!t)
         return
-    Tasks[i].status := status
-    Tasks[i].doneOn := (status = "open") ? "" : CurDay
+    t.status := status
+    t.doneOn := (status = "open") ? "" : CurDay
     SaveState()
     Refresh()
 }
@@ -98,30 +106,29 @@ SetStatus(i, status) {
 ; a task keeps notes as day -> text, and CloseDay() moves the finished day's
 ; into Past with the rest of that day.
 ;
-; They used to be lines in the journal and nothing else, which is why the panel
-; could never show one and nobody could change one. Now they are part of the
-; task: the hover shows today's, right-click edits it, and the day's note in
+; The hover shows today's, right-click edits it, and the day's note in
 ; Obsidian carries it beside the task it is about.
 TaskNote(t, day) {
-    return (IsObject(t.notes) && t.notes.HasKey(day)) ? t.notes[day] : ""
+    return (IsObject(t.notes) && t.notes.Has(day)) ? t.notes[day] : ""
 }
 
 ; Set, change or - with "" - remove the note on a task for a day. The day may
 ; be over: an answer to "why not?" given the next morning belongs to the day
 ; before, and that day's note is rewritten to carry it.
 TaskSetNote(id, day, text) {
-    global Past, CurDay
     text := Trim(RegExReplace(text, "[\r\n\t]+", " "))
     i := TaskIndex(id)
     if (i) {
-        if (!IsObject(Tasks[i].notes))
-            Tasks[i].notes := {}
-        if (text = "")
-            Tasks[i].notes.Delete(day)
-        else
-            Tasks[i].notes[day] := text
+        t := Tasks[i]
+        if (!IsObject(t.notes))
+            t.notes := DayMap()
+        if (text = "") {
+            if t.notes.Has(day)
+                t.notes.Delete(day)
+        } else
+            t.notes[day] := text
     }
-    for _, r in Past
+    for r in Past
         if (r.id = id && r.day = day)
             r.note := text
     SaveState()
@@ -136,11 +143,12 @@ TaskSetNote(id, day, text) {
 ; nothing stays pending, which matters: RemoveAt shifts every index above it
 ; and a pending one would then point at the wrong task.
 DeleteTask(i) {
-    if (!Tasks[i])
+    t := TaskAt(i)
+    if (!t)
         return
     if (!CancelMark("T", i)) {
         CommitMark()
-        Journal("- dropped: " Tasks[i].text)
+        Journal("- dropped: " t.text)
     }
     Tasks.RemoveAt(i)
     SaveState()

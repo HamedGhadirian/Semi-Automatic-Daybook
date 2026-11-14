@@ -18,6 +18,8 @@
 ; vault: nobody reads it in the normal run of things, it is where to look when
 ; a number seems wrong. Journal() and JournalNote() write to it.
 ;================================================================================
+#Requires AutoHotkey v2.0
+
 ;================================================================================
 ; Which file is a day's note
 ;================================================================================
@@ -28,7 +30,7 @@
 ; month folders the roll-up files days into (2026\2026-10 October\).
 ;
 ; Looked up afresh every time - a rename in Obsidian is seen at once, and the
-; Loop below is the system's own file search, quick on any folder size.
+; loop below is the system's own file search, quick on any folder size.
 ;
 ; Two files for one day: if the plain one has nothing of yours in it - Daybook
 ; made it before the titled one turned up - the titled one is the day's note.
@@ -39,23 +41,26 @@
 ; words, neither is touched: the plain one is used, and JournalTwins names the
 ; day so the journal window can say so.
 JournalFile(day, fold := false) {
-    global JournalDir, JournalTwins
+    global JournalTwins
     found := JournalFind(day)
-    if (found.Length() = 0)
+    if (found.Length = 0)
         return JournalDir "\" day ".md"
-    if (found.Length() = 1)
+    if (found.Length = 1)
         return found[1]
     plain := "", named := []
-    for _, f in found {
-        SplitPath, f, name
+    for f in found {
+        SplitPath(f, &name)
         if (name = day ".md")
             plain := f
         else
             named.Push(f)
     }
-    if (plain != "" && named.Length() = 1) {
-        FileRead, p, *P65001 %plain%
-        if (!ErrorLevel && NoteUserPart(p) = "") {
+    if (plain != "" && named.Length = 1) {
+        ok := true
+        try p := FileRead(plain, "UTF-8")
+        catch
+            ok := false
+        if (ok && NoteUserPart(p) = "") {
             if (fold)
                 JournalFold(day, plain, named[1])
             return named[1]
@@ -66,14 +71,13 @@ JournalFile(day, fold := false) {
 }
 
 JournalFind(day) {
-    global JournalDir
     found := []
     dirs := [JournalDir]
     y := SubStr(day, 1, 4), m := SubStr(day, 1, 7)
-    Loop, Files, %JournalDir%\%y%\%m%*, D
+    loop files JournalDir "\" y "\" m "*", "D"
         dirs.Push(A_LoopFileFullPath)
-    for _, dir in dirs
-        Loop, Files, %dir%\%day%*.md
+    for dir in dirs
+        loop files dir "\" day "*.md"
             if (A_LoopFileName = day ".md" || SubStr(A_LoopFileName, 11, 1) = " ")
                 found.Push(A_LoopFileFullPath)
     return found
@@ -81,7 +85,7 @@ JournalFind(day) {
 
 ; The title in a note's file name: what comes after the date, or "".
 JournalTitleOf(f) {
-    SplitPath, f, , , , name
+    SplitPath(f, , , , &name)
     return Trim(SubStr(name, 12))
 }
 
@@ -90,7 +94,7 @@ JournalTitleOf(f) {
 ; them), no dots or spaces at the end, one space between words, not too long.
 ; A date typed in front of it is taken off - the date is already there.
 JournalCleanTitle(t) {
-    t := RegExReplace(t, "[\\/:*?""<>|#^\[\]\r\n\t]", " ")
+    t := RegExReplace(t, "[\\/:*?`"<>|#^\[\]\r\n\t]", " ")
     t := RegExReplace(t, "^\s*\d{4}-\d\d-\d\d\b")
     t := Trim(RegExReplace(t, "\s+", " "))
     t := SubStr(t, 1, 80)
@@ -108,7 +112,7 @@ JournalRetitle(day, title) {
     f := JournalFile(day, true)
     if (!FileExist(f))
         return ""
-    SplitPath, f, , dir
+    SplitPath(f, , &dir)
     t := JournalCleanTitle(title)
     g := dir "\" day (t != "" ? " " t : "") ".md"
     if (g == f)
@@ -120,15 +124,15 @@ JournalRetitle(day, title) {
         return ""
     was := JournalTitleOf(f)
     moved := false
-    Loop 3 {
-        FileMove, %f%, %g%, %same%
-        ; ErrorLevel counts files that failed - a source gone missing meanwhile
-        ; is no failure to it, so the new name is looked for as well
-        if (!ErrorLevel && FileExist(g)) {
-            moved := true
-            break
+    loop 3 {
+        try {
+            FileMove(f, g, same)
+            if FileExist(g) {
+                moved := true
+                break
+            }
         }
-        Sleep, 150
+        Sleep(150)
     }
     if (!moved)
         return ""
@@ -138,34 +142,27 @@ JournalRetitle(day, title) {
 }
 
 JournalRetitleHead(f, was, now) {
-    FileRead, s, *P65001 %f%
-    if (ErrorLevel)
+    try s := FileRead(f, "UTF-8")
+    catch
         return
     nl := InStr(s, "`r`n") ? "`r`n" : "`n"
     first := SubStr(s, 1, (p := InStr(s, nl)) ? p - 1 : StrLen(s))
     if !(Trim(first) == "# " was)
         return
-    out := "# " now SubStr(s, StrLen(first) + 1)
-    tmp := f ".tmp"
-    FileDelete, %tmp%
-    FileAppend, %out%, *%tmp%, UTF-8
-    if (!ErrorLevel)
-        FileMove, %tmp%, %f%, 1
-    FileDelete, %tmp%
+    NoteReplace(f, "# " now SubStr(s, StrLen(first) + 1))
 }
 
 ; Fold a plain note Daybook made into the titled one beside it - only when the
 ; plain one holds none of your words. Its block goes to the titled note if that
 ; has none; the plain file is moved, not deleted, to backups\notes\folded.
 JournalFold(day, plain, named) {
-    global StateFile
-    FileRead, p, *P65001 %plain%
-    if (ErrorLevel)
+    try p := FileRead(plain, "UTF-8")
+    catch
         return false
     if (NoteUserPart(p) != "")
         return false
-    FileRead, n, *P65001 %named%
-    if (ErrorLevel)
+    try n := FileRead(named, "UTF-8")
+    catch
         return false
     a := InStr(p, "%% daybook:", true)
     b := a ? InStr(p, DayMarkEnd(), true, a) : 0
@@ -175,25 +172,20 @@ JournalFold(day, plain, named) {
         nl := InStr(n, "`r`n") ? "`r`n" : "`n"
         blk := SubStr(p, a, b + StrLen(DayMarkEnd()) - a)
         blk := StrReplace(StrReplace(blk, "`r"), "`n", nl)
-        out := RTrim(n, "`r`n") nl nl blk nl
-        tmp := named ".tmp"
-        FileDelete, %tmp%
-        FileAppend, %out%, *%tmp%, UTF-8
-        if (ErrorLevel)
-            return false
-        FileMove, %tmp%, %named%, 1
-        if (ErrorLevel)
+        if !NoteReplace(named, RTrim(n, "`r`n") nl nl blk nl)
             return false
     }
-    SplitPath, StateFile, , dir
+    SplitPath(StateFile, , &dir)
     if (dir = "")
         dir := A_ScriptDir
     dir .= "\backups\notes\folded"
-    if (!InStr(FileExist(dir), "D"))
-        FileCreateDir, %dir%
-    FormatTime, hms, , HHmmss
-    FileMove, %plain%, %dir%\%day%-%hms%.md, 1
-    return !ErrorLevel
+    if !DirExist(dir)
+        DirCreate(dir)
+    try {
+        FileMove(plain, dir "\" day "-" FormatTime(, "HHmmss") ".md", 1)
+        return true
+    }
+    return false
 }
 
 ; Your words in a note: everything above Daybook's block, less the title line
@@ -208,12 +200,34 @@ NoteUserPart(s) {
     return Trim(t, " `t`n")
 }
 
+; A note's text, or "" when it cannot be read.
+NoteRead(f) {
+    try return FileRead(f, "UTF-8")
+    return ""
+}
+
+; A note written whole: through a temporary file and a move, so a crash or a
+; full disk leaves the old one as it was. No line-end translation - the text
+; goes out byte for byte with the line ends it came in with. True once done.
+NoteReplace(f, out) {
+    tmp := f ".tmp"
+    try FileDelete(tmp)
+    try {
+        FileAppend(out, tmp, "UTF-8")
+        FileMove(tmp, f, 1)
+        return true
+    }
+    try FileDelete(tmp)
+    return false
+}
+
 TS() {
-    FormatTime, t, , HH:mm
-    return t
+    return FormatTime(, "HH:mm")
 }
 
 Journal(line) {
+    if IsObject(Journalled)              ; the tests: what would have been written
+        Journalled.Push(line)
     LogRaw(TS() "  " line)
 }
 
@@ -223,10 +237,11 @@ JournalNote(line) {
 
 LogRaw(text) {
     dir := A_ScriptDir "\log"
-    if (!InStr(FileExist(dir), "D"))
-        FileCreateDir, %dir%
-    FormatTime, month, , yyyy-MM
-    FileAppend, % LogicalDay() " " text "`n", %dir%\%month%.txt, UTF-8
+    try {
+        if !DirExist(dir)
+            DirCreate(dir)
+        FileAppend(LogicalDay() " " text "`n", dir "\" FormatTime(, "yyyy-MM") ".txt", "UTF-8")
+    }
 }
 
 ;================================================================================
@@ -259,18 +274,19 @@ DayMarkEnd() {
 DayNoteWrite(day, force := false) {
     global NoteBusy
     was := NoteBusy, NoteBusy := 1
-    DayNoteWriteNow(day, force)
+    try DayNoteWriteNow(day, force)
+    catch as e
+        Kit.Log("Day note " day ": " e.Message)
     NoteBusy := was
 }
 
 DayNoteWriteNow(day, force) {
-    global JournalOn, CurDay
-    static last := {}
+    static last := Map()
     if (!JournalOn || day = "")
         return
     live := (day = CurDay)
     bare := DayBlock(day, false)
-    if (!force && live && last.HasKey(day) && last[day].bare == bare
+    if (!force && live && last.Has(day) && last[day].bare == bare
         && A_TickCount - last[day].at < 30 * 60000)
         return
     block := DayBlock(day, true)
@@ -278,8 +294,8 @@ DayNoteWriteNow(day, force) {
     there := FileExist(f)
     s := ""
     if (there) {
-        FileRead, s, *P65001 %f%
-        if (ErrorLevel)
+        try s := FileRead(f, "UTF-8")
+        catch
             return
     } else if (!live)
         return                           ; no note that day: nothing to correct
@@ -306,20 +322,12 @@ DayNoteWriteNow(day, force) {
         last[day] := {bare: bare, at: A_TickCount}
         return
     }
-    if (!InStr(FileExist(JournalDir), "D"))
-        FileCreateDir, %JournalDir%
-    ; Binary mode, the *: text mode turns every `n into `r`n on the way out,
-    ; and the file would come back with line ends it never had.
-    tmp := f ".tmp"
-    FileDelete, %tmp%
-    FileAppend, %out%, *%tmp%, UTF-8
-    if (ErrorLevel)
-        return
-    FileMove, %tmp%, %f%, 1
+    if !DirExist(JournalDir)
+        DirCreate(JournalDir)
     ; Remembered only once it is on disk: a write that failed - the note held
     ; open by Obsidian or a sync - is tried again at the next save, rather
     ; than being taken as done for the next half hour.
-    if (!ErrorLevel)
+    if NoteReplace(f, out)
         last[day] := {bare: bare, at: A_TickCount}
 }
 
@@ -328,20 +336,21 @@ DayNoteWriteNow(day, force) {
 ; backups\notes\ beside the script. Whatever happens next, the words you wrote
 ; there are in that copy. Copies older than PastKeepDays are let go.
 DayNoteKeep(day, f, s) {
-    global StateFile, PastKeepDays
-    static kept := {}
-    if (kept.HasKey(day) || StateFile = "")
+    static kept := Map()
+    if (kept.Has(day) || StateFile = "")
         return                           ; no state file named: nowhere of ours to put it
     kept[day] := 1
-    SplitPath, StateFile, , dir
+    SplitPath(StateFile, , &dir)
     dir .= "\backups\notes"
-    if (!InStr(FileExist(dir), "D"))
-        FileCreateDir, %dir%
-    FileCopy, %f%, %dir%\%day%.md, 1
+    try {
+        if !DirExist(dir)
+            DirCreate(dir)
+        FileCopy(f, dir "\" day ".md", 1)
+    }
     cut := DayShift(LogicalDay(), -PastKeepDays)
-    Loop, Files, %dir%\*.md
-        if (SubStr(A_LoopFileName, 1, 10) < cut)
-            FileDelete, %A_LoopFileFullPath%
+    loop files dir "\*.md"
+        if (StrCompare(SubStr(A_LoopFileName, 1, 10), cut) < 0)
+            try FileDelete(A_LoopFileFullPath)
 }
 
 ; The block itself, from the first marker to the last, lines ending in `n.
@@ -349,17 +358,16 @@ DayNoteKeep(day, f, s) {
 ; is what an Obsidian link or embed points at - ![[2026-09-26#tasks]] - and one
 ; whose words changed during the day would be a link that breaks.
 DayBlock(day, withTime := true) {
-    global Habits, CurDay, PastTime
     s := DayMarkStart() "`n## the day`n"
     s .= "`n### tasks`n`n"
     rows := DayTasks(day)
-    for _, r in rows
+    for r in rows
         s .= DayTaskLine(r) "`n"
-    if (!rows.Length())
+    if (!rows.Length)
         s .= "nothing on the list`n"
     live := 0, done := 0, lines := ""
-    for _, h in Habits {
-        if (day < h.born)
+    for h in Habits {
+        if (StrCompare(day, h.born) < 0)
             continue
         live++
         if (HabitDid(h, day)) {
@@ -373,7 +381,7 @@ DayBlock(day, withTime := true) {
     if (live)
         s .= "`n### habits`n`n" done " of " live " done`n`n" lines
     if (withTime) {
-        t := (day = CurDay) ? DayTimeText() : (PastTime.HasKey(day) ? PastTime[day] : "")
+        t := (day = CurDay) ? DayTimeText() : (PastTime.Has(day) ? PastTime[day] : "")
         if (t != "")
             s .= "`n### time at the machine`n`n" t
     }
@@ -398,19 +406,19 @@ DayTaskLine(r) {
 
 ; What was on that day's list, as {text, status, list, carry, note}. Today is
 ; read from the live list: everything on Today, a short term task on its
-; deadline day, and a long term task only if it was finished today. An earlier day is read from what CloseDay() kept of it.
+; deadline day, and a long term task only if it was finished today. An
+; earlier day is read from what CloseDay() kept of it.
 DayTasks(day) {
-    global Tasks, Past, CurDay
     out := []
     if (day = CurDay) {
-        for _, want in ["T", "S", "L"]
-            for _, t in Tasks
+        for want in ["T", "S", "L"]
+            for t in Tasks
                 if (t.list = want && (want = "T" || t.doneOn = day
                     || (want = "S" && t.due = day)))
-                    out.Push({text: t.text, status: t.status, list: t.list
-                            , carry: t.carry, note: TaskNote(t, day)})
+                    out.Push(Rec({text: t.text, status: t.status, list: t.list
+                            , carry: t.carry, note: TaskNote(t, day)}))
     } else {
-        for _, r in Past
+        for r in Past
             if (r.day = day)
                 out.Push(r)
     }
@@ -424,8 +432,8 @@ DayTimeText() {
         return ""
     s := "active " HumanTime(total) "`n"
     tops := ""
-    for _, a in TopApps(8)
-        tops .= (tops ? " " Chr(0x00B7) " " : "") a.exe " " HumanTime(a.sec)
+    for a in TopApps(8)
+        tops .= (tops != "" ? " " Chr(0x00B7) " " : "") a.exe " " HumanTime(a.sec)
     if (tops != "")
         s .= "`n" tops "`n"
     strip := HourStrip()                 ; indented, so markdown keeps it monospaced
