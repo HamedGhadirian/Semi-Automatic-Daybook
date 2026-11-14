@@ -12,11 +12,12 @@ Notable changes, newest first. The version is in `lib\Config.ahk`
 - **More room for the names.** The ✕ beside each task is gone. Right-click a task: **Drop** if it won't happen (the day keeps it crossed, with why), or **Delete** if it was a mistake (no record).
 
 <details>
-<summary><b>More</b> (10)</summary>
+<summary><b>More</b> (11)</summary>
 
+- The panel has window buttons at the top right: settings, on top, minimise, close. Close only hides the panel; Daybook keeps running.
 - Fixed: after a film watched without touching anything, the first touch counted the whole film as a break and cleared the clock. A break now counts from the last touch or the last sound, whichever came later.
 - A dropped task shows its cross in the tick box. A click there takes the drop back.
-- Fewer settings in the window. Rounded corners is gone (every window is square). The undo time, how long a silence may be and how long input is ignored after the break key are in `Daybook.ini` only. The sit timer's settings are in a new order, with examples.
+- Fewer settings in the window. Rounded corners is gone: every window of Daybook's is round now, on Windows 11. The undo time, how long a silence may be and how long input is ignored after the break key are in `Daybook.ini` only. The sit timer's settings are in a new order, with examples.
 - The journal folder has a **pick** button, and a line under it says which files are yours to change and which Daybook writes again.
 - The settings window is shared with Daybook's sister tools: General, then Keys, then Daybook's own. Everything still saves as you change it and works at once.
 - Tray menu: Daybook's items first, then Settings, Start with Windows, Run as administrator, Look for updates now, Help, Reload, Exit. A double-click still shows or hides the panel.
