@@ -3,7 +3,7 @@
 Notable changes, newest first. The version is in `lib\Config.ahk`
 (`DaybookVersion`).
 
-## Next
+## 1.2.1 — 2026-11-15
 
 - **No false "could not save" warning.** A save tries three times before it
   warns, so a moment of OneDrive holding the file no longer shows one.

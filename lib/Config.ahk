@@ -16,7 +16,7 @@
 
 ; MAJOR.MINOR.PATCH - a dash on the end makes it a test version. The release
 ; build reads it from this line, and the tag that starts the build must match.
-global DaybookVersion := "1.2.0"
+global DaybookVersion := "1.2.1"
 
 ; The full path: settings belong next to the script, not in lib\.
 global IniFile := A_ScriptDir "\Daybook.ini"
