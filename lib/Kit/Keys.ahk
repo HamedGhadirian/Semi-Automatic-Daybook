@@ -284,7 +284,10 @@ class KitKeys {
     }
 
     ; "+#LButton" -> "Shift + Win + Click", "#!RButton" -> "Win + Alt +
-    ; Right-click" - the order people say them in. tight drops the spaces.
+    ; Right-click" - the order people say them in. tight drops the spaces, and
+    ; says "Middle" for Middle-click: the tray tip holds 127 characters, and
+    ; TLDR Vocab's keys only fit it so. (Right-click stays: "Win+Right" reads
+    ; as the arrow key.)
     static Label(hk, tight := false) {
         if (hk = "")
             return "none"
@@ -293,7 +296,8 @@ class KitKeys {
         for m in [["^", "Ctrl"], ["+", "Shift"], ["#", "Win"], ["!", "Alt"]]
             if InStr(p.mods, m[1])
                 parts.Push(m[2])
-        parts.Push(KitKeys.KeyText(p.key, p.vk))
+        k := KitKeys.KeyText(p.key, p.vk)
+        parts.Push((tight && k = "Middle-click") ? "Middle" : k)
         return KitJoin(parts, tight ? "+" : " + ")
     }
 

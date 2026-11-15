@@ -44,7 +44,8 @@ Relayout() {
     PanelBtns.Place(bx, y - 1)
     g["BreakBtn"].Move(bx - 40, y + 1, 32)
     g["ModeTxt"].Move(bx - 54, y, 12)
-    g["TimerTxt"].Move(bx - 128, y, 72)
+    g["TimerTxt"].Move(, y)
+    FitTopRow()                          ; its x and width follow the status
     y += 24
 
     ; From here down, everything is placed against y - so starting y further up

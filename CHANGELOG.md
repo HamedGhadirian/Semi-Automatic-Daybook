@@ -3,6 +3,16 @@
 Notable changes, newest first. The version is in `lib\Config.ahk`
 (`DaybookVersion`).
 
+## Next
+
+- **No false "could not save" warning.** A save tries three times before it
+  warns, so a moment of OneDrive holding the file no longer shows one.
+- **Warnings in the log have their time.**
+- **The top row fits again.** The status says why ("BREAK CUT SHORT" is new)
+  and the minutes only how many ("+12m"), so nothing is cut off beside the
+  window buttons. The narrowest panel is now 290 pixels (was 240), the least
+  that fits the whole words.
+
 ## 1.2.0 — 2026-11-14
 
 - **Now AutoHotkey v2.** The same Daybook, on the AutoHotkey that is still looked after. Your settings, tasks, habits and journal carry over untouched. The plain zip now needs [AutoHotkey v2](https://www.autohotkey.com/download/); the portable one brings it along.

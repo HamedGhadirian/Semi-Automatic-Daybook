@@ -97,7 +97,7 @@ ReturnFromAway() {
 ; shorter was a pause, not a break: the clock carries on from where it was, so a
 ; lock screen or a quick coffee never wipes the time you have built up - and a
 ; red bar stays red until you actually take the whole five. Coming back early
-; while overdue is flagged, so the digits can say so. See UpdateTimerText().
+; while overdue is flagged, so the status can say so. See SetStatusText().
 CreditBreak(tookSec) {
     global SitSec, CutShort
     if (tookSec >= BreakLenMin * 60) {

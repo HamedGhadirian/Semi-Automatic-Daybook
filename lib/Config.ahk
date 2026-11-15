@@ -246,11 +246,12 @@ ClampConfig() {
     StatsTop := Round(StatsTop)
     if (StatsTop < 1)
         StatsTop := 1
-    ; Narrower than this and a task card has no room for words; wider and it
-    ; has stopped being a panel in the corner of the screen.
+    ; Narrower than this and the top row has no room for its whole words beside
+    ; the window buttons (285 measured, 2026-11-15, and a little to spare);
+    ; wider and it has stopped being a panel in the corner of the screen.
     PanelW := Round(PanelW)
-    if (PanelW < 240)
-        PanelW := 240
+    if (PanelW < 290)
+        PanelW := 290
     if (PanelW > 700)
         PanelW := 700
     ; Negative minutes and seconds parse perfectly well and then quietly turn
@@ -406,7 +407,7 @@ DaybookRows() {
         , {kind: "num", sect: "Look", key: "FadedAlpha", def: 125, min: 0, max: 255, unit: "of 255"
             , label: "Faded to", hint: "How faint DIM and GHOST are with the pointer somewhere else."
                 . " Lower is fainter. SOLID is always solid."}
-        , {kind: "num", sect: "Look", key: "WidthPx", def: 300, min: 240, max: 700, unit: "pixels"
+        , {kind: "num", sect: "Look", key: "WidthPx", def: 300, min: 290, max: 700, unit: "pixels"
             , label: "Panel width", hint: "Everything in the panel is spaced from this."
                 . " Takes a reload (tray menu), unlike the rest of this window."}
         , {kind: "num", sect: "Look", key: "MaxHeightPx", def: 0, min: 0, max: 10000, unit: "pixels"
@@ -485,7 +486,7 @@ StopBreathingAfterMin=15
 ; How long you have to be away for it to count as a break. Away this long or
 ; longer and the clock starts again from zero. Shorter is only a pause: the
 ; clock carries on from where it was, so a red bar stays red until you take a
-; whole one, and the digits say break cut short.
+; whole one, and the panel says BREAK CUT SHORT.
 BreakMin=5
 
 ; Mouse movement counts as being at the desk. 1 means reading with a hand on
@@ -534,7 +535,7 @@ SampleSec=30
 AppsListed=10
 
 [Look]
-; How wide the panel is, in pixels, 240 to 700. Everything inside it is spaced
+; How wide the panel is, in pixels, 290 to 700. Everything inside it is spaced
 ; from this one number. 300 is what the spacing was designed around. Takes a
 ; reload.
 WidthPx=300

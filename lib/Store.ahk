@@ -113,7 +113,9 @@ SaveState() {
 
 ; The file, through a temporary one that is read back before it replaces
 ; anything. No line-end translation, so what is read back is byte for byte
-; what was meant.
+; what was meant. Tried three times before it counts as failed: a sync
+; program like OneDrive can hold the file for a moment while it uploads the
+; last save, and that is not worth a warning.
 StateWrite(s) {
     static warned := false
     if (StateNoSave)
@@ -121,14 +123,20 @@ StateWrite(s) {
     StateBackup()
     tmp := StateFile ".tmp"
     ok := false
-    try {
-        try FileDelete(tmp)
-        FileAppend(s, tmp, "UTF-8")
-        ok := (FileRead(tmp, "UTF-8") == s)
+    loop 3 {
+        if (A_Index > 1)
+            Sleep(300)
+        try {
+            try FileDelete(tmp)
+            FileAppend(s, tmp, "UTF-8")
+            ok := (FileRead(tmp, "UTF-8") == s)
+            if ok
+                FileMove(tmp, StateFile, 1)
+        } catch
+            ok := false
         if ok
-            FileMove(tmp, StateFile, 1)
-    } catch
-        ok := false
+            break
+    }
     if (!ok) {
         ; Once, not every minute: the old file is whole and the next save tries
         ; again. What is in memory is not lost while Daybook runs.
@@ -227,7 +235,7 @@ StatePrune() {
 StateSay(msg) {
     if (!StateQuiet)
         TrayTip(msg, "Daybook", 2 | 16)
-    LogRaw("! " msg)
+    LogRaw(TS() "  ! " msg)
 }
 
 ; The state file's text, or "" to start empty. A file that is there but does

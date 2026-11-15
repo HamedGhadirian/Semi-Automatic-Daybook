@@ -16,6 +16,7 @@ global SitSec       := 0
 global AwaySec      := 0
 global Away         := 0         ; the sensors say you are gone (not a declared break)
 global CutShort     := 0         ; came back early from a break taken while overdue
+global StatusWords  := ""        ; the status, long and short form (SetStatusText)
 global AppSec       := DayMap()  ; program -> seconds today
 global HourSec      := DayMap()  ; "HH|program" -> seconds
 global NextTaskId   := 1         ; the id the next new task gets - see Tasks.ahk

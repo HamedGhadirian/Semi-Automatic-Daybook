@@ -134,6 +134,56 @@ Ok("break: the status",              g["StatusTxt"].Text "|" g["BreakBtn"].Text,
 EndBreak()
 Ok("break: over",                    g["BreakBtn"].Text, "break")
 
+; ---- the top row: the status says why, the minutes how many, and they fit ----
+TopRow(over, cut) {
+    global SitSec, CutShort, EdgeState, LastShownMin
+    SitSec := SitBreakMin * 60 + over * 60, CutShort := cut
+    EdgeState := -1, LastShownMin := 9999
+    ApplySitState()
+    UpdateTimerText()
+}
+; the status ends before the minutes start, the minutes before the circle, and
+; the minutes' words fit their box (the box clips a line it cannot hold)
+Fits() {
+    g := PanelGui
+    g["StatusTxt"].GetPos(&sx, , &sw)
+    g["TimerTxt"].GetPos(&tx, , &tw)
+    g["ModeTxt"].GetPos(&mx)
+    need := TextWidth(g["TimerTxt"].Hwnd, g["TimerTxt"].Text) * 96 / A_ScreenDPI
+    return (sx + sw <= tx && tx + tw <= mx && need <= tw) ? 1 : 0
+}
+TopRow(12, 0)
+Ok("top row: overdue",               g["StatusTxt"].Text "|" g["TimerTxt"].Text "|" Fits(), "BREAK OVERDUE|+12m|1")
+TopRow(12, 1)
+Ok("top row: cut short",             g["StatusTxt"].Text "|" g["TimerTxt"].Text "|" Fits(), "BREAK CUT SHORT|+12m|1")
+TopRow(120, 1)
+Ok("top row: three digits fit",      g["TimerTxt"].Text "|" Fits(), "+120m|1")
+TopRow(-30, 0)
+Ok("top row: before the time",       g["StatusTxt"].Text "|" g["TimerTxt"].Text "|" Fits(), "FOCUS|30m left|1")
+; the narrowest panel Settings allows: every status whole, even with 3 digits
+wasW := PanelW, PanelW := 290
+Relayout()
+TopRow(999, 1)
+Ok("narrowest: whole words",         g["StatusTxt"].Text "|" g["TimerTxt"].Text "|" Fits(), "BREAK CUT SHORT|+999m|1")
+TopRow(-10, 0)
+Ok("narrowest: amber whole",         g["StatusTxt"].Text "|" Fits(), "SITTING " SitWarnMin "M+|1")
+; narrower still - only a bigger font or Windows text size gets here: the
+; status gives up words, the number never
+PanelW := 240
+Relayout()
+TopRow(12, 1)
+Ok("narrow: cut short, shorter",     g["StatusTxt"].Text "|" g["TimerTxt"].Text "|" Fits(), "CUT SHORT|+12m|1")
+TopRow(999, 1)
+Ok("narrow: three digits, shortest", g["StatusTxt"].Text "|" g["TimerTxt"].Text "|" Fits(), "OVERDUE|+999m|1")
+TopRow(-10, 0)
+Ok("narrow: amber",                  g["StatusTxt"].Text "|" Fits(), "SITTING|1")
+StartBreak()
+Ok("narrow: on a break",             g["StatusTxt"].Text "|" Fits(), "BREAK|1")
+EndBreak()
+PanelW := wasW
+Relayout()
+TopRow(-SitBreakMin, 0)
+
 ; ---- shown, hidden, and back -------------------------------------------------
 CyclePanel()                                  ; dim -> ghost
 Ok("panel key: ghost",               PanelMode, 2)

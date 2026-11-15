@@ -29,19 +29,49 @@ ApplySitState() {
     ; NagLevel > 0 would escalate from here.
 }
 
+; Each status has shorter forms for a narrow panel (FitTopRow), longest first.
 SetStatusText() {
+    global StatusWords
     if (EdgeState = 3)
-        txt := "ON A BREAK", col := CBreak
+        StatusWords := ["ON A BREAK", "BREAK"], col := CBreak
     else if (EdgeState = 4)
-        txt := "AWAY", col := CDim
+        StatusWords := ["AWAY", "AWAY"], col := CDim
     else if (EdgeState = 2)
-        txt := "BREAK OVERDUE", col := CRed
+        StatusWords := CutShort ? ["BREAK CUT SHORT", "CUT SHORT", "OVERDUE"] : ["BREAK OVERDUE", "OVERDUE"], col := CRed
     else if (EdgeState = 1)
-        txt := "SITTING " SitWarnMin "M+", col := CAmber
+        StatusWords := ["SITTING " SitWarnMin "M+", "SITTING"], col := CAmber
     else
-        txt := "FOCUS", col := CGreen
-    PSay("StatusTxt", txt, col)
+        StatusWords := ["FOCUS", "FOCUS"], col := CGreen
+    PSay("StatusTxt", StatusWords[1], col)
+    FitTopRow()
     SetBreakBtn()
+}
+
+; The top row has little room since the window buttons came (2026-11-13), so
+; the status says why and the minutes only say how many. The status is as wide
+; as its words, and the minutes take what is left up to the mode circle - so
+; the two never sit on top of each other. When the minutes would not fit (a
+; narrow panel, a long status), the status takes its short form: the number
+; is the one thing that must always show.
+FitTopRow() {
+    if !IsObject(PanelBtns) || !IsObject(StatusWords)
+        return
+    s := PanelGui["StatusTxt"], t := PanelGui["TimerTxt"]
+    dpi := 96 / A_ScreenDPI                                      ; the panel moves in 96-dpi units
+    need := Ceil(TextWidth(t.Hwnd, t.Text) * dpi)
+    right := PanelW - 8 - PanelBtns.Width - 56                   ; just before the mode circle
+    ; not a for: v2 puts a for's variable back as it was when the loop ends
+    loop StatusWords.Length {
+        words := StatusWords[A_Index]
+        w := Ceil(TextWidth(s.Hwnd, words) * dpi) + 2
+        x := 12 + w + 6
+        if (right - x >= need)
+            break
+    }
+    if (s.Text != words)
+        s.Text := words
+    s.Move(, , w)
+    t.Move(x, , (right > x) ? right - x : 0)
 }
 
 ; the button in the header says what pressing it will do
@@ -102,6 +132,7 @@ UpdateTimerText() {
             return
         LastShownMin := key
         PSay("TimerTxt", "away " m "m", col)
+        FitTopRow()
         return
     }
     left := SitBreakMin * 60 - SitSec
@@ -110,11 +141,12 @@ UpdateTimerText() {
     if (key == String(LastShownMin))
         return
     LastShownMin := key
-    ; Overdue and back early from a break: still counting up, but saying why the
-    ; bar is still red rather than looking as if the break never happened.
+    ; Overdue, or back early from a break: just the minutes over. The status
+    ; beside it says which (SetStatusText) - the row has no room for both.
     if (left >= 0)
         txt := m "m left"
     else
-        txt := CutShort ? "break cut short +" m "m" : "+" m "m over"
+        txt := "+" m "m"
     PSay("TimerTxt", txt, (left >= 0) ? CText : CRed)
+    FitTopRow()                          ; a longer number may need a shorter status
 }
