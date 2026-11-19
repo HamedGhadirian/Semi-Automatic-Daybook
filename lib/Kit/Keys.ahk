@@ -10,7 +10,8 @@
 ;   fn      what the key does
 ;   cond    (optional) the key only counts while this is true. Keep it for
 ;           keys held with a modifier: a condition on a bare click would be
-;           asked on every click in every program.
+;           asked on every click in every program. A click with modifiers
+;           also only counts when no other modifier is really held - see Guard.
 ;   shift   (optional) true: the same key with Shift does it too - fn is
 ;           handed the key pressed, so it can tell (Alt+Tab, Alt+Shift+Tab)
 ;
@@ -112,12 +113,42 @@ class KitKeys {
                 return a
     }
 
-    ; the condition this action's key lives under, or none
+    ; the condition this action's key lives under, or none. Made once per
+    ; action and kept on it: switching a key off needs the very same one.
     static Scope(a) {
-        if (a.HasProp("cond") && a.cond)
-            HotIf(a.cond)
+        if !a.HasProp("guard")
+            a.guard := KitKeys.Guard(a)
+        if a.guard
+            HotIf(a.guard)
         else
             HotIf()
+    }
+
+    ; ONLY THE KEYS YOU REALLY HOLD. A mouse click with modifiers (Win +
+    ; click) also gets this: it counts only when no other Ctrl, Alt, Shift or
+    ; Win is physically down. AutoHotkey goes by what it has been told is
+    ; down, and another program can tell it a held key went up - Global
+    ; Scroller does, to hide its keys from the page it scrolls. Then
+    ; Win + Shift + click, with Win's key repeat arriving after that "up",
+    ; looked like Win + click to the next script along. Only such clicks get
+    ; it - an action's default decides - so typing keys and Alt + Tab are
+    ; never made to wait on a condition. The action's own cond still counts.
+    static Guard(a) {
+        own := (a.HasProp("cond") && a.cond) ? a.cond : ""
+        p := KitKeys.Parse(a.def)
+        if (p.mods = "" || !KitKeys.IsMouse(p.vk))
+            return own
+        InstallKeybdHook()          ; "physically down" is only known with the hook
+        return own ? (hk) => KitKeys.Exact(hk) && own(hk) : (hk) => KitKeys.Exact(hk)
+    }
+
+    ; no modifier is physically held that the key hk does not name
+    static Exact(hk) {
+        mods := KitKeys.Parse(hk).mods
+        for m in [["^", "Ctrl"], ["!", "Alt"], ["+", "Shift"], ["#", "Win"]]
+            if (!InStr(mods, m[1]) && (GetKeyState("L" m[2], "P") || GetKeyState("R" m[2], "P")))
+                return false
+        return true
     }
 
     static On(hk, a) {
